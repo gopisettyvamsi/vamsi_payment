@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { View, ScrollView, StyleSheet, Alert } from "react-native";
+import { View, ScrollView, StyleSheet } from "react-native";
 import { Text, TextInput, Button, SegmentedButtons, Chip } from "react-native-paper";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { CATEGORIES } from "../../lib/categories";
+import { showAlert, showMessage } from "../../lib/alert";
 
 export default function AddTransaction() {
   const { editId } = useLocalSearchParams();
@@ -32,13 +33,17 @@ export default function AddTransaction() {
 
   const handleSave = async () => {
     if (!amount || isNaN(parseFloat(amount))) {
-      Alert.alert("Error", "Please enter a valid amount");
+      showMessage("Error", "Please enter a valid amount");
       return;
     }
 
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      showMessage("Error", "Please login first");
+      return;
+    }
 
     const transaction = {
       user_id: user.id,
@@ -60,17 +65,15 @@ export default function AddTransaction() {
     setLoading(false);
 
     if (error) {
-      Alert.alert("Error", error.message);
+      showMessage("Error", error.message);
     } else {
-      Alert.alert("Success", editId ? "Transaction updated!" : "Transaction added!", [
-        { text: "OK", onPress: () => {
-          setAmount("");
-          setDescription("");
-          setCategory("other");
-          setDate(new Date().toISOString().split("T")[0]);
-          if (editId) router.back();
-        }}
-      ]);
+      showMessage("Success", editId ? "Transaction updated!" : "Transaction added!", () => {
+        setAmount("");
+        setDescription("");
+        setCategory("other");
+        setDate(new Date().toISOString().split("T")[0]);
+        if (editId) router.back();
+      });
     }
   };
 

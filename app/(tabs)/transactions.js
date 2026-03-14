@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { View, FlatList, StyleSheet, Alert } from "react-native";
+import { View, FlatList, StyleSheet } from "react-native";
 import { Text, Searchbar, Chip, Card, IconButton, Menu, FAB } from "react-native-paper";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { formatCurrency, formatDate } from "../../lib/helpers";
 import { getCategoryById, CATEGORIES } from "../../lib/categories";
+import { showAlert } from "../../lib/alert";
 
 export default function Transactions() {
   const [transactions, setTransactions] = useState([]);
@@ -35,7 +36,7 @@ export default function Transactions() {
   useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
 
   const deleteTransaction = async (id) => {
-    Alert.alert("Delete", "Are you sure you want to delete this transaction?", [
+    showAlert("Delete", "Are you sure you want to delete this transaction?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",

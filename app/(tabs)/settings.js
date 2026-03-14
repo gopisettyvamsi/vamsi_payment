@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { View, ScrollView, StyleSheet, Alert } from "react-native";
+import { View, ScrollView, StyleSheet } from "react-native";
 import { Text, Card, Button, List, Switch, Divider, TextInput } from "react-native-paper";
 import { supabase } from "../../lib/supabase";
+import { showAlert, showMessage } from "../../lib/alert";
 
 export default function Settings() {
   const [user, setUser] = useState(null);
@@ -19,7 +20,7 @@ export default function Settings() {
   };
 
   const handleLogout = async () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
+    showAlert("Logout", "Are you sure you want to logout?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Logout",
@@ -32,7 +33,7 @@ export default function Settings() {
   };
 
   const handleDeleteAccount = async () => {
-    Alert.alert(
+    showAlert(
       "Delete Account",
       "This will permanently delete your account and all transactions. This cannot be undone!",
       [
@@ -45,7 +46,7 @@ export default function Settings() {
             // Delete all user transactions first
             await supabase.from("transactions").delete().eq("user_id", user.id);
             await supabase.auth.signOut();
-            Alert.alert("Deleted", "Your account data has been removed.");
+            showAlert("Deleted", "Your account data has been removed.");
           },
         },
       ]
@@ -62,7 +63,7 @@ export default function Settings() {
       .order("date", { ascending: false });
 
     if (!data || data.length === 0) {
-      Alert.alert("No Data", "No transactions to export");
+      showAlert("No Data", "No transactions to export");
       return;
     }
 
@@ -74,7 +75,7 @@ export default function Settings() {
 
     const csv = headers + rows;
 
-    Alert.alert(
+    showAlert(
       "Export Ready",
       `${data.length} transactions ready to export.\n\nOn mobile, this would save to your device.\nOn web, this would download as a file.`,
       [{ text: "OK" }]

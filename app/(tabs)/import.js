@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, ScrollView, StyleSheet, Alert, Platform, Linking } from "react-native";
+import { View, ScrollView, StyleSheet, Platform, Linking } from "react-native";
 /* global fetch */
 import { Text, Card, Button, List, ProgressBar, Chip, Divider } from "react-native-paper";
 import * as DocumentPicker from "expo-document-picker";
@@ -7,6 +7,7 @@ import * as FileSystem from "expo-file-system";
 import Papa from "papaparse";
 import { supabase } from "../../lib/supabase";
 import { parseCSVRow, parseSMS, parseEmailTransaction } from "../../lib/helpers";
+import { showAlert, showMessage } from "../../lib/alert";
 
 export default function Import() {
   const [importing, setImporting] = useState(false);
@@ -33,7 +34,7 @@ export default function Import() {
       const parsed = Papa.parse(content, { header: true, skipEmptyLines: true });
 
       if (parsed.errors.length > 0) {
-        Alert.alert("CSV Error", `Found ${parsed.errors.length} errors in the file`);
+        showAlert("CSV Error", `Found ${parsed.errors.length} errors in the file`);
       }
 
       const { data: { user } } = await supabase.auth.getUser();
@@ -65,7 +66,7 @@ export default function Import() {
       setResults({ imported, failed, total: rows.length });
       setImporting(false);
     } catch (err) {
-      Alert.alert("Error", "Failed to import CSV file");
+      showAlert("Error", "Failed to import CSV file");
       setImporting(false);
     }
   };
@@ -73,7 +74,7 @@ export default function Import() {
   // ===== GMAIL IMPORT =====
   const handleGmailImport = async () => {
     // Gmail API requires OAuth setup. This opens the setup guide.
-    Alert.alert(
+    showAlert(
       "Gmail Import Setup",
       "To import transactions from Gmail:\n\n" +
       "1. Go to Google Cloud Console\n" +
@@ -106,7 +107,7 @@ export default function Import() {
       const data = await response.json();
 
       if (!data.messages) {
-        Alert.alert("No Emails", "No transaction emails found in the last 30 days");
+        showAlert("No Emails", "No transaction emails found in the last 30 days");
         setImporting(false);
         return;
       }
@@ -145,7 +146,7 @@ export default function Import() {
       setResults({ imported, failed, total: data.messages.length });
       setImporting(false);
     } catch (err) {
-      Alert.alert("Error", "Failed to fetch Gmail messages");
+      showAlert("Error", "Failed to fetch Gmail messages");
       setImporting(false);
     }
   };
@@ -153,7 +154,7 @@ export default function Import() {
   // ===== SMS IMPORT (Android only) =====
   const handleSMSImport = async () => {
     if (Platform.OS !== "android") {
-      Alert.alert("Android Only", "SMS import is only available on Android devices");
+      showAlert("Android Only", "SMS import is only available on Android devices");
       return;
     }
 
@@ -161,7 +162,7 @@ export default function Import() {
       // Note: SMS reading requires a native module.
       // In production, you'd use react-native-get-sms-android
       // For Expo, this requires a development build (not Expo Go)
-      Alert.alert(
+      showAlert(
         "SMS Import",
         "SMS import requires a custom development build.\n\n" +
         "Steps:\n" +
@@ -172,7 +173,7 @@ export default function Import() {
         [{ text: "OK" }]
       );
     } catch (err) {
-      Alert.alert("Error", "Failed to read SMS messages");
+      showAlert("Error", "Failed to read SMS messages");
     }
   };
 
