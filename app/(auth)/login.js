@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
-import { Text, TextInput, Button, HelperText } from "react-native-paper";
+import { View, StyleSheet, KeyboardAvoidingView, Platform, Linking } from "react-native";
+import { Text, TextInput, Button, HelperText, Divider } from "react-native-paper";
 import { Link } from "expo-router";
 import { supabase } from "../../lib/supabase";
 
@@ -8,6 +8,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleLogin = async () => {
@@ -18,6 +19,29 @@ export default function Login() {
     setLoading(false);
   };
 
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError("");
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: Platform.OS === "web"
+          ? window.location.origin
+          : "payment-tracker://auth/callback",
+      },
+    });
+    if (error) {
+      setError(error.message);
+      setGoogleLoading(false);
+    } else if (data?.url) {
+      if (Platform.OS === "web") {
+        window.location.href = data.url;
+      } else {
+        Linking.openURL(data.url);
+      }
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -26,6 +50,26 @@ export default function Login() {
       <View style={styles.inner}>
         <Text variant="displaySmall" style={styles.title}>Payment Tracker</Text>
         <Text variant="bodyLarge" style={styles.subtitle}>Track your money, effortlessly</Text>
+
+        {/* Google Login Button */}
+        <Button
+          mode="outlined"
+          onPress={handleGoogleLogin}
+          loading={googleLoading}
+          disabled={googleLoading}
+          icon="google"
+          style={styles.googleBtn}
+          contentStyle={styles.buttonContent}
+          textColor="#333"
+        >
+          Continue with Google
+        </Button>
+
+        <View style={styles.dividerRow}>
+          <Divider style={styles.divider} />
+          <Text variant="bodySmall" style={styles.dividerText}>OR</Text>
+          <Divider style={styles.divider} />
+        </View>
 
         <TextInput
           label="Email"
@@ -76,7 +120,11 @@ const styles = StyleSheet.create({
   subtitle: { textAlign: "center", color: "#666", marginBottom: 32 },
   input: { marginBottom: 12 },
   button: { marginTop: 8, borderRadius: 8 },
+  googleBtn: { borderRadius: 8, borderColor: "#ddd", backgroundColor: "#fff" },
   buttonContent: { paddingVertical: 6 },
+  dividerRow: { flexDirection: "row", alignItems: "center", marginVertical: 20 },
+  divider: { flex: 1, height: 1 },
+  dividerText: { marginHorizontal: 12, color: "#999" },
   linkRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
   link: { color: "#6C63FF", fontWeight: "bold" },
 });
