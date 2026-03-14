@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Stack } from "expo-router";
-import { PaperProvider, MD3DarkTheme, MD3LightTheme } from "react-native-paper";
+import { Slot, useRouter, useSegments } from "expo-router";
+import { PaperProvider, MD3LightTheme } from "react-native-paper";
 import { supabase } from "../lib/supabase";
 
 const theme = {
@@ -17,6 +17,8 @@ const theme = {
 export default function RootLayout() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const segments = useSegments();
+  const router = useRouter();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -29,17 +31,25 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (loading) return;
+
+    const inAuthGroup = segments[0] === "(auth)";
+
+    if (!session && !inAuthGroup) {
+      // Not logged in and not on auth screen → redirect to login
+      router.replace("/(auth)/login");
+    } else if (session && inAuthGroup) {
+      // Logged in but on auth screen → redirect to dashboard
+      router.replace("/(tabs)");
+    }
+  }, [session, segments, loading]);
+
   if (loading) return null;
 
   return (
     <PaperProvider theme={theme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        {session ? (
-          <Stack.Screen name="(tabs)" />
-        ) : (
-          <Stack.Screen name="(auth)" />
-        )}
-      </Stack>
+      <Slot />
     </PaperProvider>
   );
 }
