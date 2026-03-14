@@ -28,6 +28,7 @@ export default function Login() {
         redirectTo: Platform.OS === "web"
           ? window.location.origin
           : "payment-tracker://auth/callback",
+        scopes: "https://www.googleapis.com/auth/gmail.readonly",
       },
     });
     if (error) {

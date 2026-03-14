@@ -73,26 +73,27 @@ export default function Import() {
 
   // ===== GMAIL IMPORT =====
   const handleGmailImport = async () => {
-    // Gmail API requires OAuth setup. This opens the setup guide.
-    showAlert(
-      "Gmail Import Setup",
-      "To import transactions from Gmail:\n\n" +
-      "1. Go to Google Cloud Console\n" +
-      "2. Create a project & enable Gmail API\n" +
-      "3. Create OAuth credentials\n" +
-      "4. Add credentials to Settings\n\n" +
-      "This is a one-time setup. Would you like to see the guide?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Open Guide",
-          onPress: () => Linking.openURL("https://console.cloud.google.com/apis/library/gmail.googleapis.com"),
-        },
-      ]
-    );
+    try {
+      // Get the Google provider token from the current session
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.provider_token) {
+        showAlert(
+          "Google Login Required",
+          "Please log out and log back in with Google to grant Gmail access. " +
+          "This is needed to read your bank alert emails.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      // Use the Google access token to fetch Gmail transactions
+      await fetchGmailTransactions(session.provider_token);
+    } catch (err) {
+      showAlert("Error", "Failed to connect to Gmail");
+    }
   };
 
-  // Simulated email parsing (once Gmail OAuth is set up)
   const fetchGmailTransactions = async (accessToken) => {
     try {
       setImporting(true);
