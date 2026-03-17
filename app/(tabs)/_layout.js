@@ -1,31 +1,56 @@
 import { Tabs } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { View, Platform } from "react-native";
+import { COLORS } from "../../lib/theme";
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#6C63FF",
-        tabBarInactiveTintColor: "#999",
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.tabInactive,
         tabBarStyle: {
-          backgroundColor: "#fff",
+          backgroundColor: COLORS.tabBg,
           borderTopWidth: 1,
-          borderTopColor: "#eee",
-          paddingBottom: 5,
-          paddingTop: 5,
-          height: 60,
+          borderTopColor: COLORS.border,
+          paddingBottom: Platform.OS === "ios" ? 20 : 8,
+          paddingTop: 8,
+          height: Platform.OS === "ios" ? 85 : 68,
+          ...(Platform.OS === "web" ? {} : {
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+          }),
         },
-        headerStyle: { backgroundColor: "#6C63FF" },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600",
+          letterSpacing: 0.3,
+        },
+        headerStyle: {
+          backgroundColor: COLORS.bgSurface,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
         headerTintColor: "#fff",
-        headerTitleStyle: { fontWeight: "bold" },
+        headerTitleStyle: {
+          fontWeight: "800",
+          fontSize: 20,
+          letterSpacing: 0.5,
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Dashboard",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="view-dashboard" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? { backgroundColor: COLORS.primary + "20", borderRadius: 12, padding: 4 } : { padding: 4 }}>
+              <MaterialCommunityIcons name="view-dashboard" size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -33,8 +58,10 @@ export default function TabLayout() {
         name="transactions"
         options={{
           title: "Transactions",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? { backgroundColor: COLORS.primary + "20", borderRadius: 12, padding: 4 } : { padding: 4 }}>
+              <MaterialCommunityIcons name="swap-horizontal" size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -42,8 +69,15 @@ export default function TabLayout() {
         name="add"
         options={{
           title: "Add",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="plus-circle" size={28} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={{
+              backgroundColor: focused ? COLORS.primary : COLORS.primary + "40",
+              borderRadius: 16,
+              padding: 8,
+              marginTop: -4,
+            }}>
+              <MaterialCommunityIcons name="plus" size={24} color="#fff" />
+            </View>
           ),
         }}
       />
@@ -51,8 +85,10 @@ export default function TabLayout() {
         name="import"
         options={{
           title: "Import",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="file-import" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? { backgroundColor: COLORS.primary + "20", borderRadius: 12, padding: 4 } : { padding: 4 }}>
+              <MaterialCommunityIcons name="file-import" size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -60,8 +96,10 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: "Settings",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="cog" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? { backgroundColor: COLORS.primary + "20", borderRadius: 12, padding: 4 } : { padding: 4 }}>
+              <MaterialCommunityIcons name="cog" size={24} color={color} />
+            </View>
           ),
         }}
       />

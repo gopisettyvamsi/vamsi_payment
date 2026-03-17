@@ -1,17 +1,32 @@
 import { useEffect, useState } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
-import { PaperProvider, MD3LightTheme } from "react-native-paper";
+import { PaperProvider, MD3DarkTheme } from "react-native-paper";
+import { StatusBar } from "react-native";
 import { supabase } from "../lib/supabase";
+import { COLORS } from "../lib/theme";
 
 const theme = {
-  ...MD3LightTheme,
+  ...MD3DarkTheme,
   colors: {
-    ...MD3LightTheme.colors,
-    primary: "#6C63FF",
-    secondary: "#4ECDC4",
-    background: "#F8F9FA",
-    surface: "#FFFFFF",
+    ...MD3DarkTheme.colors,
+    primary: COLORS.primary,
+    secondary: COLORS.secondary,
+    background: COLORS.bg,
+    surface: COLORS.bgCard,
+    surfaceVariant: COLORS.bgCardLight,
+    onSurface: COLORS.textPrimary,
+    onSurfaceVariant: COLORS.textSecondary,
+    outline: COLORS.border,
+    elevation: {
+      level0: "transparent",
+      level1: COLORS.bgCard,
+      level2: COLORS.bgCardLight,
+      level3: COLORS.bgCardLight,
+      level4: COLORS.bgCardLight,
+      level5: COLORS.bgCardLight,
+    },
   },
+  roundness: 16,
 };
 
 export default function RootLayout() {
@@ -33,14 +48,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loading) return;
-
     const inAuthGroup = segments[0] === "(auth)";
-
     if (!session && !inAuthGroup) {
-      // Not logged in and not on auth screen → redirect to login
       router.replace("/(auth)/login");
     } else if (session && inAuthGroup) {
-      // Logged in but on auth screen → redirect to dashboard
       router.replace("/(tabs)");
     }
   }, [session, segments, loading]);
@@ -49,6 +60,7 @@ export default function RootLayout() {
 
   return (
     <PaperProvider theme={theme}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
       <Slot />
     </PaperProvider>
   );

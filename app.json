@@ -22,7 +22,11 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "permissions": ["READ_SMS", "RECEIVE_SMS"]
+      "permissions": [
+        "READ_SMS",
+        "RECEIVE_SMS"
+      ],
+      "package": "com.vamsi_pay.paymenttracker"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -30,6 +34,12 @@
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "36520c6a-adcc-47a1-bd3b-cffa4a87b409"
+      }
+    }
   }
 }

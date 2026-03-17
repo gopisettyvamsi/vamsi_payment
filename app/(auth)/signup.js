@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { View, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { Text, TextInput, Button, HelperText } from "react-native-paper";
+import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { COLORS, SHADOWS, RADIUS } from "../../lib/theme";
 
 export default function Signup() {
   const [email, setEmail] = useState("");
@@ -13,106 +15,112 @@ export default function Signup() {
   const [success, setSuccess] = useState(false);
 
   const handleSignup = async () => {
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
+    if (password !== confirmPassword) { setError("Passwords do not match"); return; }
+    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
     setLoading(true);
     setError("");
     const { error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      setError(error.message);
-    } else {
-      setSuccess(true);
-    }
+    if (error) { setError(error.message); } else { setSuccess(true); }
     setLoading(false);
   };
 
   if (success) {
     return (
-      <View style={[styles.container, styles.inner]}>
-        <Text variant="headlineMedium" style={styles.title}>Check your email!</Text>
-        <Text variant="bodyLarge" style={{ textAlign: "center", marginBottom: 20 }}>
-          We sent a confirmation link to {email}
-        </Text>
-        <Link href="/(auth)/login">
-          <Text variant="bodyMedium" style={styles.link}>Back to Login</Text>
-        </Link>
-      </View>
+      <LinearGradient colors={["#0A0E21", "#1A1040", "#0A0E21"]} style={styles.gradient}>
+        <View style={[styles.container, styles.inner]}>
+          <View style={styles.successCard}>
+            <Text style={styles.successIcon}>✓</Text>
+            <Text style={styles.successTitle}>Check your email!</Text>
+            <Text style={styles.successText}>We sent a confirmation link to {email}</Text>
+            <Link href="/(auth)/login">
+              <Text style={styles.link}>Back to Login</Text>
+            </Link>
+          </View>
+        </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
-    >
-      <View style={styles.inner}>
-        <Text variant="displaySmall" style={styles.title}>Create Account</Text>
-        <Text variant="bodyLarge" style={styles.subtitle}>Start tracking your finances</Text>
+    <LinearGradient colors={["#0A0E21", "#1A1040", "#0A0E21"]} style={styles.gradient}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.container}
+      >
+        <View style={styles.inner}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>Start tracking your finances</Text>
+          </View>
 
-        <TextInput
-          label="Email"
-          value={email}
-          onChangeText={setEmail}
-          mode="outlined"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          style={styles.input}
-        />
-        <TextInput
-          label="Password"
-          value={password}
-          onChangeText={setPassword}
-          mode="outlined"
-          secureTextEntry
-          style={styles.input}
-        />
-        <TextInput
-          label="Confirm Password"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          mode="outlined"
-          secureTextEntry
-          style={styles.input}
-        />
+          <View style={styles.card}>
+            <TextInput
+              label="Email" value={email} onChangeText={setEmail} mode="outlined"
+              keyboardType="email-address" autoCapitalize="none" style={styles.input}
+              textColor="#fff" outlineColor={COLORS.border} activeOutlineColor={COLORS.primary}
+              theme={{ colors: { onSurfaceVariant: COLORS.textMuted } }}
+            />
+            <TextInput
+              label="Password" value={password} onChangeText={setPassword} mode="outlined"
+              secureTextEntry style={styles.input} textColor="#fff"
+              outlineColor={COLORS.border} activeOutlineColor={COLORS.primary}
+              theme={{ colors: { onSurfaceVariant: COLORS.textMuted } }}
+            />
+            <TextInput
+              label="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword}
+              mode="outlined" secureTextEntry style={styles.input} textColor="#fff"
+              outlineColor={COLORS.border} activeOutlineColor={COLORS.primary}
+              theme={{ colors: { onSurfaceVariant: COLORS.textMuted } }}
+            />
 
-        {error ? <HelperText type="error">{error}</HelperText> : null}
+            {error ? <HelperText type="error" style={{ color: COLORS.danger }}>{error}</HelperText> : null}
 
-        <Button
-          mode="contained"
-          onPress={handleSignup}
-          loading={loading}
-          disabled={loading}
-          style={styles.button}
-          contentStyle={styles.buttonContent}
-        >
-          Sign Up
-        </Button>
+            <LinearGradient
+              colors={COLORS.gradientPrimary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={styles.btnGradient}
+            >
+              <Button mode="text" onPress={handleSignup} loading={loading} disabled={loading}
+                textColor="#fff" contentStyle={{ paddingVertical: 8 }}
+                labelStyle={{ fontSize: 16, fontWeight: "800", letterSpacing: 1 }}
+              >
+                Sign Up
+              </Button>
+            </LinearGradient>
 
-        <View style={styles.linkRow}>
-          <Text variant="bodyMedium">Already have an account? </Text>
-          <Link href="/(auth)/login">
-            <Text variant="bodyMedium" style={styles.link}>Login</Text>
-          </Link>
+            <View style={styles.linkRow}>
+              <Text style={styles.linkText}>Already have an account? </Text>
+              <Link href="/(auth)/login">
+                <Text style={styles.link}>Login</Text>
+              </Link>
+            </View>
+          </View>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F9FA" },
+  gradient: { flex: 1 },
+  container: { flex: 1 },
   inner: { flex: 1, justifyContent: "center", padding: 24 },
-  title: { textAlign: "center", fontWeight: "bold", color: "#6C63FF", marginBottom: 8 },
-  subtitle: { textAlign: "center", color: "#666", marginBottom: 32 },
-  input: { marginBottom: 12 },
-  button: { marginTop: 8, borderRadius: 8 },
-  buttonContent: { paddingVertical: 6 },
+  header: { alignItems: "center", marginBottom: 32 },
+  title: { fontSize: 32, fontWeight: "900", color: "#fff", letterSpacing: 1 },
+  subtitle: { fontSize: 16, color: COLORS.textMuted, marginTop: 6 },
+  card: {
+    backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, padding: 24,
+    borderWidth: 1, borderColor: COLORS.border, ...SHADOWS.card,
+  },
+  input: { marginBottom: 14, backgroundColor: COLORS.bgInput, borderRadius: RADIUS.md },
+  btnGradient: { borderRadius: RADIUS.md, marginTop: 8, overflow: "hidden", ...SHADOWS.glow },
   linkRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
-  link: { color: "#6C63FF", fontWeight: "bold" },
+  linkText: { color: COLORS.textMuted, fontSize: 14 },
+  link: { color: COLORS.primaryLight, fontWeight: "bold", fontSize: 14 },
+  successCard: {
+    backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, padding: 40,
+    alignItems: "center", borderWidth: 1, borderColor: COLORS.border, ...SHADOWS.card,
+  },
+  successIcon: { fontSize: 48, color: COLORS.success, marginBottom: 16 },
+  successTitle: { fontSize: 24, fontWeight: "900", color: "#fff", marginBottom: 12 },
+  successText: { color: COLORS.textSecondary, textAlign: "center", marginBottom: 24, fontSize: 15 },
 });
