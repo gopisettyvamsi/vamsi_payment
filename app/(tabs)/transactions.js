@@ -1,73 +1,63 @@
 import { useState, useEffect, useCallback } from "react";
 import { View, FlatList, StyleSheet, TouchableOpacity } from "react-native";
 import { Text, Searchbar, IconButton, Menu } from "react-native-paper";
-import { LinearGradient } from "expo-linear-gradient";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { formatCurrency, formatDate } from "../../lib/helpers";
 import { getCategoryById } from "../../lib/categories";
 import { showAlert } from "../../lib/alert";
-import { COLORS, SHADOWS, RADIUS } from "../../lib/theme";
+import { C } from "../../lib/theme";
 
 export default function Transactions() {
-  const [transactions, setTransactions] = useState([]);
+  const [txns, setTxns] = useState([]);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [menuVisible, setMenuVisible] = useState(null);
   const router = useRouter();
 
-  const fetchTransactions = useCallback(async () => {
+  const fetch_ = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    let query = supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false });
-    if (filterType !== "all") query = query.eq("type", filterType);
-    if (search) query = query.ilike("description", `%${search}%`);
-    const { data } = await query.limit(100);
-    setTransactions(data || []);
+    let q = supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false });
+    if (filterType !== "all") q = q.eq("type", filterType);
+    if (search) q = q.ilike("description", `%${search}%`);
+    const { data } = await q.limit(100);
+    setTxns(data || []);
   }, [search, filterType]);
 
-  useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
+  useEffect(() => { fetch_(); }, [fetch_]);
 
-  const deleteTransaction = async (id) => {
-    showAlert("Delete", "Are you sure you want to delete this transaction?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: async () => { await supabase.from("transactions").delete().eq("id", id); fetchTransactions(); } },
+  const del = async (id) => {
+    showAlert("Delete", "Delete this transaction?", [
+      { text: "Cancel" },
+      { text: "Delete", style: "destructive", onPress: async () => { await supabase.from("transactions").delete().eq("id", id); fetch_(); } },
     ]);
   };
 
-  const renderTransaction = ({ item }) => {
+  const renderItem = ({ item }) => {
     const cat = getCategoryById(item.category);
     return (
-      <View style={styles.txCard}>
-        <View style={styles.txRow}>
-          <LinearGradient
-            colors={item.type === "income" ? COLORS.gradientGreen : COLORS.gradientRed}
-            style={styles.txIcon}
-          >
-            <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}>
-              {item.type === "income" ? "+" : "-"}
-            </Text>
-          </LinearGradient>
+      <View style={s.txCard}>
+        <View style={s.txRow}>
+          <View style={[s.txIcon, { backgroundColor: cat.color + "18" }]}>
+            <MaterialCommunityIcons name={cat.icon} size={22} color={cat.color} />
+          </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.txDesc}>{item.description || cat.label}</Text>
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
-              <Text style={styles.txDate}>{formatDate(item.date)}</Text>
-              <View style={styles.sourceChip}>
-                <Text style={styles.sourceText}>{item.source}</Text>
-              </View>
+            <Text style={s.txDesc}>{item.description || cat.label}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 }}>
+              <Text style={s.txDate}>{formatDate(item.date)}</Text>
+              <View style={s.srcChip}><Text style={s.srcText}>{item.source}</Text></View>
             </View>
           </View>
-          <Text style={[styles.txAmount, { color: item.type === "income" ? COLORS.success : COLORS.danger }]}>
-            {item.type === "income" ? "+" : "-"}{formatCurrency(item.amount)}
+          <Text style={[s.txAmt, { color: item.type === "income" ? C.green : C.textDark }]}>
+            {item.type === "income" ? "+" : "-"} {formatCurrency(item.amount)}
           </Text>
-          <Menu
-            visible={menuVisible === item.id}
-            onDismiss={() => setMenuVisible(null)}
-            contentStyle={{ backgroundColor: COLORS.bgSurface }}
-            anchor={<IconButton icon="dots-vertical" size={20} iconColor={COLORS.textMuted} onPress={() => setMenuVisible(item.id)} />}
-          >
-            <Menu.Item onPress={() => { setMenuVisible(null); router.push({ pathname: "/(tabs)/add", params: { editId: item.id } }); }} title="Edit" leadingIcon="pencil" titleStyle={{ color: "#fff" }} />
-            <Menu.Item onPress={() => { setMenuVisible(null); deleteTransaction(item.id); }} title="Delete" leadingIcon="delete" titleStyle={{ color: COLORS.danger }} />
+          <Menu visible={menuVisible === item.id} onDismiss={() => setMenuVisible(null)}
+            contentStyle={{ backgroundColor: C.card }}
+            anchor={<IconButton icon="dots-vertical" size={18} iconColor="#999" onPress={() => setMenuVisible(item.id)} />}>
+            <Menu.Item onPress={() => { setMenuVisible(null); router.push({ pathname: "/(tabs)/add", params: { editId: item.id } }); }} title="Edit" leadingIcon="pencil" />
+            <Menu.Item onPress={() => { setMenuVisible(null); del(item.id); }} title="Delete" leadingIcon="delete" titleStyle={{ color: C.red }} />
           </Menu>
         </View>
       </View>
@@ -75,73 +65,46 @@ export default function Transactions() {
   };
 
   return (
-    <View style={styles.container}>
-      <Searchbar
-        placeholder="Search transactions..."
-        value={search}
-        onChangeText={setSearch}
-        style={styles.search}
-        inputStyle={{ color: "#fff" }}
-        iconColor={COLORS.textMuted}
-        placeholderTextColor={COLORS.textMuted}
-      />
+    <View style={s.container}>
+      <Searchbar placeholder="Search..." value={search} onChangeText={setSearch}
+        style={s.search} inputStyle={{ color: C.textDark, fontSize: 14 }}
+        iconColor="#999" placeholderTextColor="#999" />
 
-      <View style={styles.filterRow}>
-        {["all", "income", "expense"].map(type => (
-          <TouchableOpacity key={type} onPress={() => setFilterType(type)} activeOpacity={0.7}>
-            {filterType === type ? (
-              <LinearGradient colors={COLORS.gradientPrimary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.chip}>
-                <Text style={styles.chipTextActive}>{type.charAt(0).toUpperCase() + type.slice(1)}</Text>
-              </LinearGradient>
-            ) : (
-              <View style={[styles.chip, styles.chipInactive]}>
-                <Text style={styles.chipText}>{type.charAt(0).toUpperCase() + type.slice(1)}</Text>
-              </View>
-            )}
+      <View style={s.filterRow}>
+        {[["all", "All"], ["income", "Income"], ["expense", "Expense"]].map(([k, v]) => (
+          <TouchableOpacity key={k} onPress={() => setFilterType(k)} activeOpacity={0.7}
+            style={[s.filterChip, filterType === k && s.filterActive]}>
+            <Text style={[s.filterText, filterType === k && s.filterActiveText]}>{v}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <FlatList
-        data={transactions}
-        renderItem={renderTransaction}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        showsVerticalScrollIndicator={false}
+      <FlatList data={txns} renderItem={renderItem} keyExtractor={i => i.id}
+        contentContainerStyle={{ paddingBottom: 80 }} showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📋</Text>
-            <Text style={styles.emptyText}>No transactions found</Text>
+          <View style={{ alignItems: "center", paddingVertical: 60 }}>
+            <MaterialCommunityIcons name="magnify" size={48} color="rgba(255,255,255,0.2)" />
+            <Text style={{ color: "rgba(255,255,255,0.4)", marginTop: 12, fontWeight: "600" }}>No transactions found</Text>
           </View>
-        }
-      />
+        } />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg, padding: 16 },
-  search: {
-    marginBottom: 14, backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg,
-    borderWidth: 1, borderColor: COLORS.border, elevation: 0,
-  },
-  filterRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
-  chip: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: RADIUS.full },
-  chipInactive: { backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border },
-  chipText: { color: COLORS.textMuted, fontWeight: "600", fontSize: 13 },
-  chipTextActive: { color: "#fff", fontWeight: "800", fontSize: 13 },
-  txCard: {
-    marginBottom: 10, borderRadius: RADIUS.lg, backgroundColor: COLORS.bgCard,
-    borderWidth: 1, borderColor: COLORS.border, ...SHADOWS.soft,
-  },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.bg, padding: 16 },
+  search: { backgroundColor: C.card, borderRadius: 14, elevation: 2, marginBottom: 12, height: 48 },
+  filterRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
+  filterChip: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: C.border },
+  filterActive: { backgroundColor: C.purple, borderColor: C.purple },
+  filterText: { color: "rgba(255,255,255,0.5)", fontWeight: "700", fontSize: 13 },
+  filterActiveText: { color: "#fff" },
+  txCard: { backgroundColor: C.card, borderRadius: 14, marginBottom: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 },
   txRow: { flexDirection: "row", alignItems: "center", padding: 14, gap: 12 },
-  txIcon: { width: 42, height: 42, borderRadius: 14, justifyContent: "center", alignItems: "center" },
-  txDesc: { color: "#fff", fontSize: 15, fontWeight: "600" },
-  txDate: { color: COLORS.textMuted, fontSize: 12 },
-  sourceChip: { backgroundColor: COLORS.bgInput, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  sourceText: { color: COLORS.textMuted, fontSize: 10, fontWeight: "600", textTransform: "uppercase" },
-  txAmount: { fontSize: 16, fontWeight: "800" },
-  emptyState: { alignItems: "center", paddingVertical: 60 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyText: { color: COLORS.textSecondary, fontSize: 16, fontWeight: "600" },
+  txIcon: { width: 44, height: 44, borderRadius: 14, justifyContent: "center", alignItems: "center" },
+  txDesc: { color: C.textDark, fontSize: 14, fontWeight: "600" },
+  txDate: { color: "#999", fontSize: 11 },
+  srcChip: { backgroundColor: "#F5F5F5", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  srcText: { color: "#999", fontSize: 9, fontWeight: "700", textTransform: "uppercase" },
+  txAmt: { fontSize: 15, fontWeight: "800" },
 });

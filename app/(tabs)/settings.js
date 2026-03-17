@@ -4,187 +4,127 @@ import { Text, Switch } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
-import { showAlert, showMessage } from "../../lib/alert";
-import { COLORS, SHADOWS, RADIUS } from "../../lib/theme";
+import { showAlert } from "../../lib/alert";
+import { C } from "../../lib/theme";
 
 export default function Settings() {
   const [user, setUser] = useState(null);
   const [currency, setCurrency] = useState("INR");
-  const [notifications, setNotifications] = useState(true);
+  const [notif, setNotif] = useState(true);
 
-  useEffect(() => { loadUser(); }, []);
+  useEffect(() => { (async () => { const { data: { user } } = await supabase.auth.getUser(); setUser(user); })(); }, []);
 
-  const loadUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
-  };
+  const logout = () => showAlert("Logout", "Are you sure?", [
+    { text: "Cancel" },
+    { text: "Logout", style: "destructive", onPress: () => supabase.auth.signOut() },
+  ]);
 
-  const handleLogout = async () => {
-    showAlert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Logout", style: "destructive", onPress: async () => { await supabase.auth.signOut(); } },
-    ]);
-  };
+  const deleteAcc = () => showAlert("Delete Account", "This will permanently delete everything!", [
+    { text: "Cancel" },
+    { text: "Delete", style: "destructive", onPress: async () => {
+      if (!user) return;
+      await supabase.from("transactions").delete().eq("user_id", user.id);
+      await supabase.auth.signOut();
+    }},
+  ]);
 
-  const handleDeleteAccount = async () => {
-    showAlert("Delete Account", "This will permanently delete your account and all transactions. This cannot be undone!", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: async () => {
-        if (!user) return;
-        await supabase.from("transactions").delete().eq("user_id", user.id);
-        await supabase.auth.signOut();
-        showAlert("Deleted", "Your account data has been removed.");
-      }},
-    ]);
-  };
-
-  const handleExportData = async () => {
+  const exportCSV = async () => {
     if (!user) return;
     const { data } = await supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false });
-    if (!data || data.length === 0) { showAlert("No Data", "No transactions to export"); return; }
-    const headers = "date,amount,type,category,description,source\n";
-    const rows = data.map(t => `${new Date(t.date).toISOString().split("T")[0]},${t.amount},${t.type},${t.category},"${t.description || ""}",${t.source}`).join("\n");
-    const csv = headers + rows;
-    showAlert("Export Ready", `${data.length} transactions ready to export.`, [{ text: "OK" }]);
+    if (!data?.length) { showAlert("No Data", "No transactions to export"); return; }
+    showAlert("Export Ready", `${data.length} transactions ready.`);
   };
 
-  const SettingsItem = ({ icon, iconColor, title, desc, right, onPress }) => (
-    <TouchableOpacity onPress={onPress} disabled={!onPress} activeOpacity={onPress ? 0.7 : 1} style={styles.settingsItem}>
-      <View style={[styles.settingsIcon, { backgroundColor: (iconColor || COLORS.primary) + "20" }]}>
-        <MaterialCommunityIcons name={icon} size={22} color={iconColor || COLORS.primary} />
+  const Item = ({ icon, color, title, sub, right, onPress, danger }) => (
+    <TouchableOpacity onPress={onPress} disabled={!onPress} activeOpacity={onPress ? 0.6 : 1} style={s.item}>
+      <View style={[s.itemIcon, { backgroundColor: (color || C.purple) + "18" }]}>
+        <MaterialCommunityIcons name={icon} size={20} color={color || C.purple} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.itemTitle}>{title}</Text>
-        {desc ? <Text style={styles.itemDesc}>{desc}</Text> : null}
+        <Text style={[s.itemTitle, danger && { color: C.red }]}>{title}</Text>
+        {sub ? <Text style={s.itemSub}>{sub}</Text> : null}
       </View>
-      {right || null}
+      {right || (onPress ? <MaterialCommunityIcons name="chevron-right" size={20} color="#ddd" /> : null)}
     </TouchableOpacity>
   );
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Profile Card */}
-      <LinearGradient colors={COLORS.gradientPrimary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {user?.email ? user.email[0].toUpperCase() : "?"}
-          </Text>
+    <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
+      {/* Profile */}
+      <LinearGradient colors={["#5F259F", "#7B3FBF"]} style={s.profile}>
+        <View style={s.avatar}>
+          <Text style={s.avatarText}>{user?.email?.[0]?.toUpperCase() || "?"}</Text>
         </View>
-        <Text style={styles.profileEmail}>{user?.email || "Loading..."}</Text>
-        <Text style={styles.profileSince}>
-          Member since {user?.created_at ? new Date(user.created_at).toLocaleDateString() : "..."}
-        </Text>
+        <Text style={s.email}>{user?.email || "Loading..."}</Text>
+        <Text style={s.since}>Member since {user?.created_at ? new Date(user.created_at).toLocaleDateString("en-IN", { month: "long", year: "numeric" }) : "..."}</Text>
       </LinearGradient>
 
       {/* Preferences */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Preferences</Text>
-        <View style={styles.card}>
-          <SettingsItem icon="currency-inr" iconColor={COLORS.warning} title="Currency" desc={currency}
-            right={
-              <View style={styles.currencyRow}>
-                {["INR", "USD", "EUR"].map(c => (
-                  <TouchableOpacity key={c} onPress={() => setCurrency(c)} activeOpacity={0.7}>
-                    {currency === c ? (
-                      <LinearGradient colors={COLORS.gradientPrimary} style={styles.currencyChip}>
-                        <Text style={styles.currencyTextActive}>{c}</Text>
-                      </LinearGradient>
-                    ) : (
-                      <View style={[styles.currencyChip, styles.currencyInactive]}>
-                        <Text style={styles.currencyText}>{c}</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            }
-          />
-          <View style={styles.divider} />
-          <SettingsItem icon="bell" iconColor={COLORS.info} title="Notifications"
-            right={<Switch value={notifications} onValueChange={setNotifications} color={COLORS.primary} />}
-          />
-        </View>
+      <Text style={s.sectionLabel}>PREFERENCES</Text>
+      <View style={s.card}>
+        <Item icon="currency-inr" color={C.orange} title="Currency" sub={currency}
+          right={
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              {["INR", "USD", "EUR"].map(c => (
+                <TouchableOpacity key={c} onPress={() => setCurrency(c)}
+                  style={[s.currChip, currency === c && { backgroundColor: C.purple }]}>
+                  <Text style={[s.currText, currency === c && { color: "#fff" }]}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          } />
+        <View style={s.divider} />
+        <Item icon="bell-outline" color={C.blue} title="Notifications"
+          right={<Switch value={notif} onValueChange={setNotif} color={C.purple} />} />
       </View>
 
       {/* Data */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Data</Text>
-        <View style={styles.card}>
-          <SettingsItem icon="download" iconColor={COLORS.teal} title="Export Transactions" desc="Download as CSV file" onPress={handleExportData} />
-        </View>
+      <Text style={s.sectionLabel}>DATA</Text>
+      <View style={s.card}>
+        <Item icon="download" color={C.teal} title="Export CSV" sub="Download all transactions" onPress={exportCSV} />
       </View>
 
       {/* About */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
-        <View style={styles.card}>
-          <SettingsItem icon="information" iconColor={COLORS.info} title="Version" desc="1.0.0" />
-          <View style={styles.divider} />
-          <SettingsItem icon="code-tags" iconColor={COLORS.secondary} title="Built with" desc="React Native + Expo + Supabase" />
-        </View>
+      <Text style={s.sectionLabel}>ABOUT</Text>
+      <View style={s.card}>
+        <Item icon="information-outline" color={C.blue} title="Version" sub="1.0.0" />
+        <View style={s.divider} />
+        <Item icon="code-tags" color={C.purple} title="Built with" sub="React Native + Expo + Supabase" />
       </View>
 
       {/* Actions */}
-      <View style={styles.section}>
-        <TouchableOpacity onPress={handleLogout} activeOpacity={0.7}>
-          <View style={styles.logoutBtn}>
-            <MaterialCommunityIcons name="logout" size={20} color={COLORS.warning} />
-            <Text style={styles.logoutText}>Logout</Text>
-          </View>
+      <View style={{ marginTop: 24 }}>
+        <TouchableOpacity onPress={logout} activeOpacity={0.7} style={s.actionBtn}>
+          <MaterialCommunityIcons name="logout" size={20} color={C.orange} />
+          <Text style={[s.actionText, { color: C.orange }]}>Logout</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity onPress={handleDeleteAccount} activeOpacity={0.7} style={{ marginTop: 10 }}>
-          <View style={styles.deleteBtn}>
-            <MaterialCommunityIcons name="delete-forever" size={20} color={COLORS.danger} />
-            <Text style={styles.deleteText}>Delete Account</Text>
-          </View>
+        <TouchableOpacity onPress={deleteAcc} activeOpacity={0.7} style={[s.actionBtn, { marginTop: 8, borderColor: C.red + "30" }]}>
+          <MaterialCommunityIcons name="delete-outline" size={20} color={C.red} />
+          <Text style={[s.actionText, { color: C.red }]}>Delete Account</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={{ height: 100 }} />
+      <View style={{ height: 80 }} />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg, padding: 20 },
-  profileCard: {
-    borderRadius: RADIUS.lg, padding: 28, alignItems: "center", marginBottom: 24, ...SHADOWS.glow,
-  },
-  avatar: {
-    width: 72, height: 72, borderRadius: 24, backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center", alignItems: "center", marginBottom: 14,
-    borderWidth: 2, borderColor: "rgba(255,255,255,0.3)",
-  },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.bg },
+  profile: { padding: 32, alignItems: "center", borderBottomLeftRadius: 28, borderBottomRightRadius: 28, shadowColor: C.purple, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 10 },
+  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: "rgba(255,255,255,0.2)", justifyContent: "center", alignItems: "center", marginBottom: 14, borderWidth: 3, borderColor: "rgba(255,255,255,0.3)" },
   avatarText: { color: "#fff", fontSize: 28, fontWeight: "900" },
-  profileEmail: { color: "#fff", fontSize: 18, fontWeight: "700" },
-  profileSince: { color: "rgba(255,255,255,0.6)", fontSize: 13, marginTop: 4 },
-  section: { marginBottom: 20 },
-  sectionTitle: { color: COLORS.textMuted, fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, marginLeft: 4 },
-  card: {
-    backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg,
-    borderWidth: 1, borderColor: COLORS.border, overflow: "hidden",
-  },
-  settingsItem: { flexDirection: "row", alignItems: "center", padding: 16, gap: 14 },
-  settingsIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center" },
-  itemTitle: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  itemDesc: { color: COLORS.textMuted, fontSize: 13, marginTop: 2 },
-  divider: { height: 1, backgroundColor: COLORS.border, marginHorizontal: 16 },
-  currencyRow: { flexDirection: "row", gap: 6 },
-  currencyChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: RADIUS.sm },
-  currencyInactive: { backgroundColor: COLORS.bgInput, borderWidth: 1, borderColor: COLORS.border },
-  currencyText: { color: COLORS.textMuted, fontWeight: "600", fontSize: 12 },
-  currencyTextActive: { color: "#fff", fontWeight: "800", fontSize: 12 },
-  logoutBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
-    backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, paddingVertical: 16,
-    borderWidth: 1, borderColor: COLORS.warning + "40",
-  },
-  logoutText: { color: COLORS.warning, fontWeight: "800", fontSize: 15 },
-  deleteBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
-    backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, paddingVertical: 16,
-    borderWidth: 1, borderColor: COLORS.danger + "40",
-  },
-  deleteText: { color: COLORS.danger, fontWeight: "800", fontSize: 15 },
+  email: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  since: { color: "rgba(255,255,255,0.6)", fontSize: 12, marginTop: 4 },
+  sectionLabel: { color: "rgba(255,255,255,0.35)", fontSize: 11, fontWeight: "800", letterSpacing: 2, marginTop: 24, marginBottom: 8, marginLeft: 20 },
+  card: { backgroundColor: C.card, marginHorizontal: 16, borderRadius: 16, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  item: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
+  itemIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+  itemTitle: { color: C.textDark, fontSize: 14, fontWeight: "600" },
+  itemSub: { color: "#999", fontSize: 12, marginTop: 1 },
+  divider: { height: 1, backgroundColor: "#F0F0F5", marginLeft: 64 },
+  currChip: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, backgroundColor: "#F5F5F5" },
+  currText: { fontSize: 11, fontWeight: "700", color: "#999" },
+  actionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginHorizontal: 16, paddingVertical: 16, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.04)", borderWidth: 1, borderColor: C.orange + "30" },
+  actionText: { fontWeight: "800", fontSize: 15 },
 });

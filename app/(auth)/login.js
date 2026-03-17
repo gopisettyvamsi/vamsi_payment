@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
+import { View, StyleSheet, KeyboardAvoidingView, Platform, Image } from "react-native";
 import { Text, TextInput, Button, HelperText } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
 import { supabase } from "../../lib/supabase";
-import { COLORS, SHADOWS, RADIUS } from "../../lib/theme";
+import { C } from "../../lib/theme";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -14,139 +14,81 @@ export default function Login() {
   const [error, setError] = useState("");
 
   const handleLogin = async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) setError(error.message);
     setLoading(false);
   };
 
   const handleGoogleLogin = async () => {
-    setGoogleLoading(true);
-    setError("");
+    setGoogleLoading(true); setError("");
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: Platform.OS === "web"
-          ? window.location.origin
-          : "payment-tracker://auth/callback",
+        redirectTo: Platform.OS === "web" ? window.location.origin : "payment-tracker://auth/callback",
         scopes: "https://www.googleapis.com/auth/gmail.readonly",
       },
     });
-    if (error) {
-      setError(error.message);
-      setGoogleLoading(false);
-    } else if (data?.url) {
-      if (Platform.OS === "web") {
-        window.location.href = data.url;
-      } else {
-        const { Linking } = require("react-native");
-        Linking.openURL(data.url);
-      }
+    if (error) { setError(error.message); setGoogleLoading(false); }
+    else if (data?.url) {
+      if (Platform.OS === "web") window.location.href = data.url;
+      else { const { Linking } = require("react-native"); Linking.openURL(data.url); }
     }
   };
 
   return (
-    <LinearGradient colors={["#0A0E21", "#1A1040", "#0A0E21"]} style={styles.gradient}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
-      >
-        <View style={styles.inner}>
-          {/* Logo & Title */}
-          <View style={styles.logoContainer}>
-            <LinearGradient
-              colors={COLORS.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.logoGradient}
-            >
-              <Text style={styles.logoIcon}>$</Text>
-            </LinearGradient>
-            <Text style={styles.title}>Payment Tracker</Text>
-            <Text style={styles.subtitle}>Track your money, effortlessly</Text>
+    <LinearGradient colors={C.purpleDeep} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <View style={s.inner}>
+          {/* Logo */}
+          <View style={s.logoWrap}>
+            <View style={s.logo}>
+              <Text style={s.logoText}>₹</Text>
+            </View>
+            <Text style={s.brand}>PayTracker</Text>
+            <Text style={s.tagline}>Smart money tracking</Text>
           </View>
 
-          {/* Glass Card */}
-          <View style={styles.card}>
-            {/* Google Login Button */}
-            <LinearGradient
-              colors={["rgba(255,255,255,0.15)", "rgba(255,255,255,0.05)"]}
-              style={styles.googleBtnGradient}
-            >
-              <Button
-                mode="text"
-                onPress={handleGoogleLogin}
-                loading={googleLoading}
-                disabled={googleLoading}
-                icon="google"
-                textColor="#fff"
-                contentStyle={styles.buttonContent}
-                labelStyle={styles.googleLabel}
-              >
-                Continue with Google
-              </Button>
-            </LinearGradient>
+          {/* Google Button */}
+          <View style={s.googleBtn}>
+            <Button mode="contained" onPress={handleGoogleLogin} loading={googleLoading}
+              disabled={googleLoading} icon="google" buttonColor="#fff" textColor={C.textDark}
+              contentStyle={{ paddingVertical: 6 }} labelStyle={{ fontWeight: "700", fontSize: 15 }}
+              style={{ borderRadius: 12 }}>
+              Continue with Google
+            </Button>
+          </View>
 
-            <View style={styles.dividerRow}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>OR</Text>
-              <View style={styles.divider} />
-            </View>
+          <View style={s.orRow}>
+            <View style={s.orLine} /><Text style={s.orText}>or sign in with email</Text><View style={s.orLine} />
+          </View>
 
-            <TextInput
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              mode="outlined"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              style={styles.input}
-              textColor="#fff"
-              outlineColor={COLORS.border}
-              activeOutlineColor={COLORS.primary}
-              theme={{ colors: { onSurfaceVariant: COLORS.textMuted } }}
-            />
-            <TextInput
-              label="Password"
-              value={password}
-              onChangeText={setPassword}
-              mode="outlined"
-              secureTextEntry
-              style={styles.input}
-              textColor="#fff"
-              outlineColor={COLORS.border}
-              activeOutlineColor={COLORS.primary}
-              theme={{ colors: { onSurfaceVariant: COLORS.textMuted } }}
-            />
+          {/* Email/Password */}
+          <TextInput label="Email" value={email} onChangeText={setEmail} mode="flat"
+            keyboardType="email-address" autoCapitalize="none" style={s.input}
+            textColor="#fff" underlineColor={C.border} activeUnderlineColor={C.purpleLight}
+            theme={{ colors: { onSurfaceVariant: C.textMuted } }}
+            left={<TextInput.Icon icon="email" iconColor={C.textMuted} />}
+          />
+          <TextInput label="Password" value={password} onChangeText={setPassword} mode="flat"
+            secureTextEntry style={s.input} textColor="#fff"
+            underlineColor={C.border} activeUnderlineColor={C.purpleLight}
+            theme={{ colors: { onSurfaceVariant: C.textMuted } }}
+            left={<TextInput.Icon icon="lock" iconColor={C.textMuted} />}
+          />
 
-            {error ? <HelperText type="error" style={{ color: COLORS.danger }}>{error}</HelperText> : null}
+          {error ? <HelperText type="error" style={{ color: C.red }}>{error}</HelperText> : null}
 
-            <LinearGradient
-              colors={COLORS.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.loginBtnGradient}
-            >
-              <Button
-                mode="text"
-                onPress={handleLogin}
-                loading={loading}
-                disabled={loading}
-                textColor="#fff"
-                contentStyle={styles.buttonContent}
-                labelStyle={styles.loginLabel}
-              >
-                Login
-              </Button>
-            </LinearGradient>
+          <Button mode="contained" onPress={handleLogin} loading={loading} disabled={loading}
+            buttonColor={C.purple} textColor="#fff" style={s.loginBtn}
+            contentStyle={{ paddingVertical: 8 }}
+            labelStyle={{ fontWeight: "800", fontSize: 16, letterSpacing: 0.5 }}>
+            Sign In
+          </Button>
 
-            <View style={styles.linkRow}>
-              <Text style={styles.linkText}>Don't have an account? </Text>
-              <Link href="/(auth)/signup">
-                <Text style={styles.link}>Sign Up</Text>
-              </Link>
-            </View>
+          <View style={s.linkRow}>
+            <Text style={{ color: C.textMuted }}>New here? </Text>
+            <Link href="/(auth)/signup"><Text style={{ color: C.purpleLight, fontWeight: "700" }}>Create Account</Text></Link>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -154,64 +96,18 @@ export default function Login() {
   );
 }
 
-const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  container: { flex: 1 },
-  inner: { flex: 1, justifyContent: "center", padding: 24 },
-  logoContainer: { alignItems: "center", marginBottom: 40 },
-  logoGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 28,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-    ...SHADOWS.glow,
-  },
-  logoIcon: { fontSize: 36, fontWeight: "bold", color: "#fff" },
-  title: {
-    fontSize: 32,
-    fontWeight: "900",
-    color: "#fff",
-    letterSpacing: 1,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: COLORS.textMuted,
-    marginTop: 6,
-  },
-  card: {
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.lg,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    ...SHADOWS.card,
-  },
-  googleBtnGradient: {
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: "hidden",
-  },
-  googleLabel: { fontSize: 16, fontWeight: "700" },
-  buttonContent: { paddingVertical: 8 },
-  dividerRow: { flexDirection: "row", alignItems: "center", marginVertical: 20 },
-  divider: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerText: { marginHorizontal: 16, color: COLORS.textMuted, fontSize: 13 },
-  input: {
-    marginBottom: 14,
-    backgroundColor: COLORS.bgInput,
-    borderRadius: RADIUS.md,
-  },
-  loginBtnGradient: {
-    borderRadius: RADIUS.md,
-    marginTop: 8,
-    overflow: "hidden",
-    ...SHADOWS.glow,
-  },
-  loginLabel: { fontSize: 16, fontWeight: "800", letterSpacing: 1 },
-  linkRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
-  linkText: { color: COLORS.textMuted, fontSize: 14 },
-  link: { color: COLORS.primaryLight, fontWeight: "bold", fontSize: 14 },
+const s = StyleSheet.create({
+  inner: { flex: 1, justifyContent: "center", paddingHorizontal: 28 },
+  logoWrap: { alignItems: "center", marginBottom: 48 },
+  logo: { width: 80, height: 80, borderRadius: 24, backgroundColor: C.purple, justifyContent: "center", alignItems: "center", marginBottom: 16, shadowColor: C.purple, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 16, elevation: 12 },
+  logoText: { fontSize: 40, fontWeight: "900", color: "#fff" },
+  brand: { fontSize: 30, fontWeight: "900", color: "#fff", letterSpacing: 1 },
+  tagline: { fontSize: 14, color: C.textMuted, marginTop: 4 },
+  googleBtn: { marginBottom: 4 },
+  orRow: { flexDirection: "row", alignItems: "center", marginVertical: 20 },
+  orLine: { flex: 1, height: 1, backgroundColor: C.border },
+  orText: { color: C.textMuted, marginHorizontal: 14, fontSize: 13 },
+  input: { backgroundColor: "rgba(255,255,255,0.05)", marginBottom: 8, borderRadius: 12 },
+  loginBtn: { marginTop: 16, borderRadius: 12 },
+  linkRow: { flexDirection: "row", justifyContent: "center", marginTop: 24 },
 });

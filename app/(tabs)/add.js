@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { View, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
-import { Text, TextInput, Button, SegmentedButtons } from "react-native-paper";
-import { LinearGradient } from "expo-linear-gradient";
+import { Text, TextInput, Button } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { CATEGORIES } from "../../lib/categories";
-import { showAlert, showMessage } from "../../lib/alert";
-import { COLORS, SHADOWS, RADIUS } from "../../lib/theme";
+import { showMessage } from "../../lib/alert";
+import { C } from "../../lib/theme";
 
 export default function AddTransaction() {
   const { editId } = useLocalSearchParams();
@@ -18,170 +18,119 @@ export default function AddTransaction() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { if (editId) loadTransaction(); }, [editId]);
+  useEffect(() => { if (editId) load(); }, [editId]);
 
-  const loadTransaction = async () => {
+  const load = async () => {
     const { data } = await supabase.from("transactions").select("*").eq("id", editId).single();
-    if (data) {
-      setType(data.type); setAmount(String(data.amount));
-      setDescription(data.description || ""); setCategory(data.category);
-      setDate(new Date(data.date).toISOString().split("T")[0]);
-    }
+    if (data) { setType(data.type); setAmount(String(data.amount)); setDescription(data.description || ""); setCategory(data.category); setDate(new Date(data.date).toISOString().split("T")[0]); }
   };
 
-  const handleSave = async () => {
-    if (!amount || isNaN(parseFloat(amount))) { showMessage("Error", "Please enter a valid amount"); return; }
+  const save = async () => {
+    if (!amount || isNaN(parseFloat(amount))) { showMessage("Error", "Enter a valid amount"); return; }
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); showMessage("Error", "Please login first"); return; }
-    const transaction = { user_id: user.id, type, amount: parseFloat(amount), description, category, date: new Date(date).toISOString(), source: "manual" };
-    let error;
-    if (editId) ({ error } = await supabase.from("transactions").update(transaction).eq("id", editId));
-    else ({ error } = await supabase.from("transactions").insert(transaction));
+    if (!user) { setLoading(false); return; }
+    const tx = { user_id: user.id, type, amount: parseFloat(amount), description, category, date: new Date(date).toISOString(), source: "manual" };
+    const { error } = editId ? await supabase.from("transactions").update(tx).eq("id", editId) : await supabase.from("transactions").insert(tx);
     setLoading(false);
     if (error) showMessage("Error", error.message);
-    else showMessage("Success", editId ? "Transaction updated!" : "Transaction added!", () => {
-      setAmount(""); setDescription(""); setCategory("other"); setDate(new Date().toISOString().split("T")[0]);
-      if (editId) router.back();
-    });
+    else showMessage("Success", editId ? "Updated!" : "Added!", () => { setAmount(""); setDescription(""); setCategory("other"); if (editId) router.back(); });
   };
 
-  const incomeCategories = CATEGORIES.filter(c => ["salary", "freelance", "investment", "other"].includes(c.id));
-  const expenseCategories = CATEGORIES.filter(c => !["salary", "freelance", "investment"].includes(c.id));
-  const displayCategories = type === "income" ? incomeCategories : expenseCategories;
+  const incCats = CATEGORIES.filter(c => ["salary", "freelance", "investment", "other"].includes(c.id));
+  const expCats = CATEGORIES.filter(c => !["salary", "freelance", "investment"].includes(c.id));
+  const cats = type === "income" ? incCats : expCats;
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>{editId ? "Edit Transaction" : "New Transaction"}</Text>
-
+    <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
       {/* Type Toggle */}
-      <View style={styles.toggleRow}>
+      <View style={s.toggleRow}>
         <TouchableOpacity onPress={() => setType("expense")} style={{ flex: 1 }} activeOpacity={0.7}>
-          {type === "expense" ? (
-            <LinearGradient colors={COLORS.gradientRed} style={styles.toggleBtn}>
-              <Text style={styles.toggleTextActive}>Expense</Text>
-            </LinearGradient>
-          ) : (
-            <View style={[styles.toggleBtn, styles.toggleInactive]}>
-              <Text style={styles.toggleText}>Expense</Text>
-            </View>
-          )}
+          <View style={[s.toggleBtn, type === "expense" && { backgroundColor: C.red }]}>
+            <MaterialCommunityIcons name="arrow-up-circle" size={20} color={type === "expense" ? "#fff" : "#999"} />
+            <Text style={[s.toggleText, type === "expense" && s.toggleActive]}>Expense</Text>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setType("income")} style={{ flex: 1 }} activeOpacity={0.7}>
-          {type === "income" ? (
-            <LinearGradient colors={COLORS.gradientGreen} style={styles.toggleBtn}>
-              <Text style={styles.toggleTextActive}>Income</Text>
-            </LinearGradient>
-          ) : (
-            <View style={[styles.toggleBtn, styles.toggleInactive]}>
-              <Text style={styles.toggleText}>Income</Text>
-            </View>
-          )}
+          <View style={[s.toggleBtn, type === "income" && { backgroundColor: C.green }]}>
+            <MaterialCommunityIcons name="arrow-down-circle" size={20} color={type === "income" ? "#fff" : "#999"} />
+            <Text style={[s.toggleText, type === "income" && s.toggleActive]}>Income</Text>
+          </View>
         </TouchableOpacity>
       </View>
 
-      {/* Amount */}
-      <View style={styles.amountCard}>
-        <Text style={styles.amountLabel}>Amount</Text>
-        <View style={styles.amountRow}>
-          <Text style={styles.currencySymbol}>₹</Text>
-          <TextInput
-            value={amount}
-            onChangeText={setAmount}
-            mode="flat"
-            keyboardType="numeric"
-            style={styles.amountInput}
-            textColor="#fff"
-            underlineColor="transparent"
-            activeUnderlineColor={COLORS.primary}
-            placeholder="0"
-            placeholderTextColor={COLORS.textMuted}
+      {/* Amount Card */}
+      <View style={s.amountCard}>
+        <Text style={s.amountLabel}>AMOUNT</Text>
+        <View style={s.amountRow}>
+          <Text style={s.rupee}>₹</Text>
+          <TextInput value={amount} onChangeText={setAmount} mode="flat" keyboardType="numeric"
+            style={s.amountInput} textColor={C.textDark} underlineColor="transparent"
+            activeUnderlineColor={C.purple} placeholder="0" placeholderTextColor="#ccc"
           />
         </View>
       </View>
 
-      {/* Description */}
-      <TextInput
-        label="Description"
-        value={description}
-        onChangeText={setDescription}
-        mode="outlined"
-        style={styles.input}
-        textColor="#fff"
-        outlineColor={COLORS.border}
-        activeOutlineColor={COLORS.primary}
-        theme={{ colors: { onSurfaceVariant: COLORS.textMuted } }}
-      />
-
-      {/* Date */}
-      <TextInput
-        label="Date (YYYY-MM-DD)"
-        value={date}
-        onChangeText={setDate}
-        mode="outlined"
-        style={styles.input}
-        textColor="#fff"
-        outlineColor={COLORS.border}
-        activeOutlineColor={COLORS.primary}
-        theme={{ colors: { onSurfaceVariant: COLORS.textMuted } }}
-      />
+      {/* Fields */}
+      <View style={s.fieldCard}>
+        <TextInput label="Description" value={description} onChangeText={setDescription}
+          mode="flat" style={s.field} textColor={C.textDark}
+          underlineColor="#eee" activeUnderlineColor={C.purple}
+          left={<TextInput.Icon icon="text" iconColor="#999" />}
+          theme={{ colors: { onSurfaceVariant: "#999" } }} />
+        <View style={{ height: 1, backgroundColor: "#F0F0F0" }} />
+        <TextInput label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate}
+          mode="flat" style={s.field} textColor={C.textDark}
+          underlineColor="#eee" activeUnderlineColor={C.purple}
+          left={<TextInput.Icon icon="calendar" iconColor="#999" />}
+          theme={{ colors: { onSurfaceVariant: "#999" } }} />
+      </View>
 
       {/* Category */}
-      <Text style={styles.sectionTitle}>Category</Text>
-      <View style={styles.categoryGrid}>
-        {displayCategories.map(cat => (
-          <TouchableOpacity key={cat.id} onPress={() => setCategory(cat.id)} activeOpacity={0.7}>
-            <View style={[styles.catChip, category === cat.id && { backgroundColor: cat.color + "30", borderColor: cat.color }]}>
-              <Text style={[styles.catText, category === cat.id && { color: cat.color, fontWeight: "800" }]}>
-                {cat.label}
-              </Text>
+      <Text style={s.sectionTitle}>Category</Text>
+      <View style={s.catGrid}>
+        {cats.map(cat => (
+          <TouchableOpacity key={cat.id} onPress={() => setCategory(cat.id)} activeOpacity={0.7}
+            style={[s.catItem, category === cat.id && { backgroundColor: cat.color + "15", borderColor: cat.color }]}>
+            <View style={[s.catIcon, { backgroundColor: cat.color + "18" }]}>
+              <MaterialCommunityIcons name={cat.icon} size={22} color={cat.color} />
             </View>
+            <Text style={[s.catLabel, category === cat.id && { color: cat.color, fontWeight: "800" }]}>{cat.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Save Button */}
-      <LinearGradient
-        colors={type === "expense" ? COLORS.gradientRed : COLORS.gradientGreen}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-        style={styles.saveBtnGradient}
-      >
-        <Button mode="text" onPress={handleSave} loading={loading} disabled={loading}
-          textColor="#fff" contentStyle={{ paddingVertical: 8 }}
-          labelStyle={{ fontSize: 16, fontWeight: "800", letterSpacing: 0.5 }}
-        >
-          {editId ? "Update Transaction" : "Add Transaction"}
-        </Button>
-      </LinearGradient>
+      {/* Save */}
+      <TouchableOpacity onPress={save} disabled={loading} activeOpacity={0.8}>
+        <View style={[s.saveBtn, { backgroundColor: type === "expense" ? C.red : C.green }]}>
+          <MaterialCommunityIcons name={editId ? "check" : "plus"} size={22} color="#fff" />
+          <Text style={s.saveBtnText}>{loading ? "Saving..." : editId ? "Update" : "Add Transaction"}</Text>
+        </View>
+      </TouchableOpacity>
 
-      <View style={{ height: 100 }} />
+      <View style={{ height: 80 }} />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg, padding: 20 },
-  title: { color: "#fff", fontSize: 24, fontWeight: "900", marginBottom: 20, letterSpacing: 0.3 },
-  toggleRow: { flexDirection: "row", gap: 12, marginBottom: 20 },
-  toggleBtn: { paddingVertical: 14, borderRadius: RADIUS.md, alignItems: "center" },
-  toggleInactive: { backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border },
-  toggleText: { color: COLORS.textMuted, fontWeight: "600", fontSize: 15 },
-  toggleTextActive: { color: "#fff", fontWeight: "800", fontSize: 15 },
-  amountCard: {
-    backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, padding: 20,
-    marginBottom: 16, borderWidth: 1, borderColor: COLORS.border, ...SHADOWS.soft,
-  },
-  amountLabel: { color: COLORS.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.bg, padding: 16 },
+  toggleRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
+  toggleBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: C.border },
+  toggleText: { color: "#999", fontWeight: "700", fontSize: 15 },
+  toggleActive: { color: "#fff" },
+  amountCard: { backgroundColor: C.card, borderRadius: 16, padding: 20, marginBottom: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  amountLabel: { color: "#999", fontSize: 11, fontWeight: "700", letterSpacing: 1.5, marginBottom: 8 },
   amountRow: { flexDirection: "row", alignItems: "center" },
-  currencySymbol: { color: COLORS.primary, fontSize: 32, fontWeight: "900", marginRight: 8 },
-  amountInput: { flex: 1, backgroundColor: "transparent", fontSize: 32, fontWeight: "900" },
-  input: { marginBottom: 14, backgroundColor: COLORS.bgInput, borderRadius: RADIUS.md },
-  sectionTitle: { color: "#fff", fontSize: 16, fontWeight: "800", marginBottom: 12, marginTop: 4, letterSpacing: 0.3 },
-  categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 24 },
-  catChip: {
-    backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border,
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: RADIUS.md,
-  },
-  catText: { color: COLORS.textSecondary, fontWeight: "600", fontSize: 13 },
-  saveBtnGradient: { borderRadius: RADIUS.md, overflow: "hidden", ...SHADOWS.glow },
+  rupee: { color: C.purple, fontSize: 36, fontWeight: "900", marginRight: 4 },
+  amountInput: { flex: 1, backgroundColor: "transparent", fontSize: 36, fontWeight: "900" },
+  fieldCard: { backgroundColor: C.card, borderRadius: 16, overflow: "hidden", marginBottom: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  field: { backgroundColor: "transparent" },
+  sectionTitle: { color: "#fff", fontSize: 15, fontWeight: "800", marginBottom: 12, letterSpacing: 0.3 },
+  catGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 24 },
+  catItem: { alignItems: "center", width: 78, paddingVertical: 12, borderRadius: 14, backgroundColor: C.card, borderWidth: 1.5, borderColor: "#F0F0F0" },
+  catIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center", marginBottom: 6 },
+  catLabel: { fontSize: 10, fontWeight: "600", color: C.textDark, textAlign: "center" },
+  saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 14 },
+  saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
 });

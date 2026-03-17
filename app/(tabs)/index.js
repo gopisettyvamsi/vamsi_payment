@@ -2,254 +2,250 @@ import { useState, useEffect, useCallback } from "react";
 import { View, ScrollView, StyleSheet, Dimensions, RefreshControl, TouchableOpacity } from "react-native";
 import { Text } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LineChart, PieChart } from "react-native-chart-kit";
+import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { formatCurrency, getMonthName } from "../../lib/helpers";
 import { getCategoryById } from "../../lib/categories";
-import { COLORS, SHADOWS, RADIUS } from "../../lib/theme";
+import { C } from "../../lib/theme";
 
-const screenWidth = Dimensions.get("window").width;
+const W = Dimensions.get("window").width;
 
 export default function Dashboard() {
-  const [transactions, setTransactions] = useState([]);
+  const [txns, setTxns] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState("month");
+  const router = useRouter();
 
-  const fetchTransactions = useCallback(async () => {
+  const fetch_ = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const now = new Date();
-    let startDate;
-    if (period === "week") startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    else if (period === "month") startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    else startDate = new Date(now.getFullYear(), 0, 1);
+    let start;
+    if (period === "week") start = new Date(now.getTime() - 7 * 86400000);
+    else if (period === "month") start = new Date(now.getFullYear(), now.getMonth(), 1);
+    else start = new Date(now.getFullYear(), 0, 1);
     const { data } = await supabase.from("transactions").select("*")
-      .eq("user_id", user.id).gte("date", startDate.toISOString())
-      .order("date", { ascending: false });
-    setTransactions(data || []);
+      .eq("user_id", user.id).gte("date", start.toISOString()).order("date", { ascending: false });
+    setTxns(data || []);
   }, [period]);
 
-  useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
+  useEffect(() => { fetch_(); }, [fetch_]);
+  const onRefresh = async () => { setRefreshing(true); await fetch_(); setRefreshing(false); };
 
-  const onRefresh = async () => { setRefreshing(true); await fetchTransactions(); setRefreshing(false); };
-
-  const totalIncome = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + Number(t.amount), 0);
-  const totalExpense = transactions.filter(t => t.type === "expense").reduce((sum, t) => sum + Number(t.amount), 0);
-  const balance = totalIncome - totalExpense;
+  const income = txns.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
+  const expense = txns.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+  const balance = income - expense;
 
   const getMonthlyData = () => {
-    const months = [];
+    const ms = [];
     const now = new Date();
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      months.push({ month: getMonthName(d.getMonth()), year: d.getFullYear(), m: d.getMonth() });
+      ms.push({ label: getMonthName(d.getMonth()), y: d.getFullYear(), m: d.getMonth() });
     }
     return {
-      labels: months.map(m => m.month),
+      labels: ms.map(m => m.label),
       datasets: [
-        { data: months.map(m => transactions.filter(t => { const td = new Date(t.date); return td.getMonth() === m.m && td.getFullYear() === m.year && t.type === "expense"; }).reduce((sum, t) => sum + Number(t.amount), 0) || 0), color: () => "#EF4444" },
-        { data: months.map(m => transactions.filter(t => { const td = new Date(t.date); return td.getMonth() === m.m && td.getFullYear() === m.year && t.type === "income"; }).reduce((sum, t) => sum + Number(t.amount), 0) || 0), color: () => "#10B981" },
+        { data: ms.map(m => txns.filter(t => { const d = new Date(t.date); return d.getMonth() === m.m && d.getFullYear() === m.y && t.type === "expense"; }).reduce((s, t) => s + Number(t.amount), 0) || 0), color: () => C.red },
+        { data: ms.map(m => txns.filter(t => { const d = new Date(t.date); return d.getMonth() === m.m && d.getFullYear() === m.y && t.type === "income"; }).reduce((s, t) => s + Number(t.amount), 0) || 0), color: () => C.green },
       ],
     };
   };
 
-  const getCategoryData = () => {
-    const categoryTotals = {};
-    transactions.filter(t => t.type === "expense").forEach(t => {
-      categoryTotals[t.category] = (categoryTotals[t.category] || 0) + Number(t.amount);
-    });
-    return Object.entries(categoryTotals).sort(([, a], [, b]) => b - a).slice(0, 5).map(([catId, amount]) => {
-      const cat = getCategoryById(catId);
-      return { name: cat.label, amount, color: cat.color, legendFontColor: COLORS.textSecondary, legendFontSize: 12 };
+  const getCatData = () => {
+    const tots = {};
+    txns.filter(t => t.type === "expense").forEach(t => { tots[t.category] = (tots[t.category] || 0) + Number(t.amount); });
+    return Object.entries(tots).sort(([,a],[,b]) => b - a).slice(0, 5).map(([id, amt]) => {
+      const cat = getCategoryById(id);
+      return { name: cat.label, amount: amt, color: cat.color, legendFontColor: "#999", legendFontSize: 11 };
     });
   };
 
-  const monthlyData = getMonthlyData();
-  const categoryData = getCategoryData();
+  const QuickAction = ({ icon, label, color, onPress }) => (
+    <TouchableOpacity onPress={onPress} style={s.qaItem} activeOpacity={0.7}>
+      <View style={[s.qaIcon, { backgroundColor: color + "18" }]}>
+        <MaterialCommunityIcons name={icon} size={26} color={color} />
+      </View>
+      <Text style={s.qaLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Period Selector */}
-      <View style={styles.periodRow}>
-        {["week", "month", "year"].map(p => (
-          <TouchableOpacity key={p} onPress={() => setPeriod(p)} activeOpacity={0.7}>
-            {period === p ? (
-              <LinearGradient colors={COLORS.gradientPrimary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={styles.periodChip}>
-                <Text style={styles.periodTextActive}>{p.charAt(0).toUpperCase() + p.slice(1)}</Text>
-              </LinearGradient>
-            ) : (
-              <View style={[styles.periodChip, styles.periodInactive]}>
-                <Text style={styles.periodText}>{p.charAt(0).toUpperCase() + p.slice(1)}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
-      </View>
+    <ScrollView style={s.container} showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.purple} />}>
 
       {/* Balance Card */}
-      <LinearGradient
-        colors={balance >= 0 ? ["#6C63FF", "#A855F7"] : ["#EF4444", "#F97316"]}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={styles.balanceCard}
-      >
-        <Text style={styles.balanceLabel}>Total Balance</Text>
-        <Text style={styles.balanceAmount}>{formatCurrency(balance)}</Text>
-        <View style={styles.balanceRow}>
-          <View style={styles.balanceItem}>
-            <View style={styles.balanceIconBg}>
-              <Text style={{ fontSize: 14 }}>↑</Text>
-            </View>
+      <LinearGradient colors={["#5F259F", "#7B3FBF", "#9B59D0"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.balanceCard}>
+        <View style={s.balanceTop}>
+          <Text style={s.balanceLabel}>Total Balance</Text>
+          <View style={s.periodRow}>
+            {["week", "month", "year"].map(p => (
+              <TouchableOpacity key={p} onPress={() => setPeriod(p)}
+                style={[s.periodBtn, period === p && s.periodActive]}>
+                <Text style={[s.periodText, period === p && s.periodActiveText]}>
+                  {p === "week" ? "7D" : p === "month" ? "1M" : "1Y"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <Text style={s.balanceAmt}>{formatCurrency(balance)}</Text>
+        <View style={s.balanceBottom}>
+          <View style={s.balanceStat}>
+            <View style={s.statDot}><MaterialCommunityIcons name="arrow-down" size={14} color={C.green} /></View>
             <View>
-              <Text style={styles.balanceItemLabel}>Income</Text>
-              <Text style={styles.balanceItemAmount}>{formatCurrency(totalIncome)}</Text>
+              <Text style={s.statLabel}>Income</Text>
+              <Text style={s.statAmt}>{formatCurrency(income)}</Text>
             </View>
           </View>
-          <View style={styles.balanceDivider} />
-          <View style={styles.balanceItem}>
-            <View style={[styles.balanceIconBg, { backgroundColor: "rgba(239,68,68,0.3)" }]}>
-              <Text style={{ fontSize: 14 }}>↓</Text>
+          <View style={{ width: 1, height: 36, backgroundColor: "rgba(255,255,255,0.15)" }} />
+          <View style={s.balanceStat}>
+            <View style={[s.statDot, { backgroundColor: "rgba(255,59,48,0.2)" }]}>
+              <MaterialCommunityIcons name="arrow-up" size={14} color={C.red} />
             </View>
             <View>
-              <Text style={styles.balanceItemLabel}>Expense</Text>
-              <Text style={styles.balanceItemAmount}>{formatCurrency(totalExpense)}</Text>
+              <Text style={s.statLabel}>Expense</Text>
+              <Text style={s.statAmt}>{formatCurrency(expense)}</Text>
             </View>
           </View>
         </View>
       </LinearGradient>
 
-      {/* Monthly Trend Chart */}
-      {transactions.length > 0 && (
-        <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Monthly Trend</Text>
-          <LineChart
-            data={monthlyData}
-            width={screenWidth - 72}
-            height={200}
-            chartConfig={{
-              backgroundColor: "transparent",
-              backgroundGradientFrom: COLORS.bgCard,
-              backgroundGradientTo: COLORS.bgCard,
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(108, 99, 255, ${opacity})`,
-              labelColor: () => COLORS.textMuted,
-              propsForDots: { r: "5", strokeWidth: "2", stroke: COLORS.primary },
-              propsForBackgroundLines: { strokeDasharray: "", stroke: COLORS.border },
-              fillShadowGradient: COLORS.primary,
-              fillShadowGradientOpacity: 0.1,
-            }}
-            bezier
-            style={{ borderRadius: 16 }}
-          />
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: "#EF4444" }]} />
-              <Text style={styles.legendText}>Expense</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: "#10B981" }]} />
-              <Text style={styles.legendText}>Income</Text>
+      {/* Quick Actions */}
+      <View style={s.qaCard}>
+        <View style={s.qaRow}>
+          <QuickAction icon="plus-circle-outline" label="Add" color={C.purple} onPress={() => router.push("/(tabs)/add")} />
+          <QuickAction icon="swap-horizontal" label="History" color={C.blue} onPress={() => router.push("/(tabs)/transactions")} />
+          <QuickAction icon="file-import-outline" label="Import" color={C.teal} onPress={() => router.push("/(tabs)/import")} />
+          <QuickAction icon="download-outline" label="Export" color={C.orange} onPress={() => router.push("/(tabs)/settings")} />
+        </View>
+      </View>
+
+      {/* Monthly Trend */}
+      {txns.length > 0 && (
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Monthly Trend</Text>
+          <View style={s.chartWrap}>
+            <LineChart
+              data={getMonthlyData()} width={W - 56} height={180}
+              chartConfig={{
+                backgroundColor: "transparent", backgroundGradientFrom: C.card, backgroundGradientTo: C.card,
+                decimalPlaces: 0, color: () => C.purple, labelColor: () => "#999",
+                propsForDots: { r: "4", strokeWidth: "2", stroke: C.purple },
+                propsForBackgroundLines: { stroke: "#f0f0f0" },
+              }}
+              bezier style={{ borderRadius: 12 }}
+            />
+            <View style={s.legendRow}>
+              <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: C.red }]} /><Text style={s.legendText}>Expense</Text></View>
+              <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: C.green }]} /><Text style={s.legendText}>Income</Text></View>
             </View>
           </View>
         </View>
       )}
 
-      {/* Category Pie Chart */}
-      {categoryData.length > 0 && (
-        <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Expense by Category</Text>
-          <PieChart
-            data={categoryData}
-            width={screenWidth - 72}
-            height={200}
-            chartConfig={{ color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})` }}
-            accessor="amount"
-            backgroundColor="transparent"
-            paddingLeft="15"
-          />
+      {/* Category Breakdown */}
+      {getCatData().length > 0 && (
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Top Expenses</Text>
+          <View style={s.chartWrap}>
+            <PieChart data={getCatData()} width={W - 56} height={180}
+              chartConfig={{ color: () => "#000" }} accessor="amount"
+              backgroundColor="transparent" paddingLeft="15"
+            />
+          </View>
         </View>
       )}
 
       {/* Recent Transactions */}
-      <View style={styles.chartCard}>
-        <Text style={styles.chartTitle}>Recent Transactions</Text>
-        {transactions.slice(0, 5).map(t => {
-          const cat = getCategoryById(t.category);
-          return (
-            <View key={t.id} style={styles.txRow}>
-              <LinearGradient
-                colors={t.type === "income" ? COLORS.gradientGreen : COLORS.gradientRed}
-                style={styles.txIcon}
-              >
-                <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}>
-                  {t.type === "income" ? "+" : "-"}
+      <View style={s.section}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Text style={s.sectionTitle}>Recent</Text>
+          <TouchableOpacity onPress={() => router.push("/(tabs)/transactions")}>
+            <Text style={{ color: C.purple, fontWeight: "700", fontSize: 13 }}>See All</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={s.txCard}>
+          {txns.slice(0, 6).map((t, i) => {
+            const cat = getCategoryById(t.category);
+            return (
+              <View key={t.id} style={[s.txRow, i < Math.min(txns.length, 6) - 1 && s.txBorder]}>
+                <View style={[s.txIcon, { backgroundColor: cat.color + "18" }]}>
+                  <MaterialCommunityIcons name={cat.icon} size={22} color={cat.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.txDesc}>{t.description || cat.label}</Text>
+                  <Text style={s.txDate}>{new Date(t.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</Text>
+                </View>
+                <Text style={[s.txAmt, { color: t.type === "income" ? C.green : C.textDark }]}>
+                  {t.type === "income" ? "+" : "-"} {formatCurrency(t.amount)}
                 </Text>
-              </LinearGradient>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.txDesc}>{t.description || cat.label}</Text>
-                <Text style={styles.txDate}>{new Date(t.date).toLocaleDateString()}</Text>
               </View>
-              <Text style={[styles.txAmount, { color: t.type === "income" ? COLORS.success : COLORS.danger }]}>
-                {t.type === "income" ? "+" : "-"}{formatCurrency(t.amount)}
-              </Text>
+            );
+          })}
+          {txns.length === 0 && (
+            <View style={{ alignItems: "center", paddingVertical: 40 }}>
+              <MaterialCommunityIcons name="wallet-outline" size={48} color="#ddd" />
+              <Text style={{ color: "#999", marginTop: 12, fontWeight: "600" }}>No transactions yet</Text>
+              <TouchableOpacity onPress={() => router.push("/(tabs)/add")} style={s.emptyBtn}>
+                <Text style={{ color: C.purple, fontWeight: "700" }}>+ Add your first</Text>
+              </TouchableOpacity>
             </View>
-          );
-        })}
-        {transactions.length === 0 && (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>💰</Text>
-            <Text style={styles.emptyText}>No transactions yet</Text>
-            <Text style={styles.emptySubtext}>Add your first one!</Text>
-          </View>
-        )}
+          )}
+        </View>
       </View>
 
-      <View style={{ height: 100 }} />
+      <View style={{ height: 80 }} />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg, padding: 20 },
-  periodRow: { flexDirection: "row", justifyContent: "center", gap: 10, marginBottom: 20 },
-  periodChip: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: RADIUS.full },
-  periodInactive: { backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border },
-  periodText: { color: COLORS.textMuted, fontWeight: "600", fontSize: 14 },
-  periodTextActive: { color: "#fff", fontWeight: "800", fontSize: 14 },
-  balanceCard: {
-    borderRadius: RADIUS.lg, padding: 24, marginBottom: 20, ...SHADOWS.glow,
-  },
-  balanceLabel: { color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 },
-  balanceAmount: { color: "#fff", fontSize: 36, fontWeight: "900", marginVertical: 8 },
-  balanceRow: { flexDirection: "row", alignItems: "center", marginTop: 12 },
-  balanceItem: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
-  balanceDivider: { width: 1, height: 40, backgroundColor: "rgba(255,255,255,0.2)" },
-  balanceIconBg: { width: 36, height: 36, borderRadius: 12, backgroundColor: "rgba(16,185,129,0.3)", justifyContent: "center", alignItems: "center" },
-  balanceItemLabel: { color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: "500" },
-  balanceItemAmount: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  chartCard: {
-    backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, padding: 20,
-    marginBottom: 16, borderWidth: 1, borderColor: COLORS.border, ...SHADOWS.soft,
-  },
-  chartTitle: { color: "#fff", fontSize: 18, fontWeight: "800", marginBottom: 16, letterSpacing: 0.3 },
-  legendRow: { flexDirection: "row", justifyContent: "center", gap: 24, marginTop: 12 },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 8 },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendText: { color: COLORS.textSecondary, fontSize: 13 },
-  txRow: {
-    flexDirection: "row", alignItems: "center", paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderLight, gap: 14,
-  },
-  txIcon: { width: 42, height: 42, borderRadius: 14, justifyContent: "center", alignItems: "center" },
-  txDesc: { color: "#fff", fontSize: 15, fontWeight: "600" },
-  txDate: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
-  txAmount: { fontSize: 16, fontWeight: "800" },
-  emptyState: { alignItems: "center", paddingVertical: 40 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyText: { color: COLORS.textSecondary, fontSize: 16, fontWeight: "600" },
-  emptySubtext: { color: COLORS.textMuted, fontSize: 13, marginTop: 4 },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.bg },
+
+  // Balance
+  balanceCard: { marginHorizontal: 16, marginTop: 16, borderRadius: 20, padding: 24, shadowColor: C.purple, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 10 },
+  balanceTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  balanceLabel: { color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 },
+  periodRow: { flexDirection: "row", gap: 4 },
+  periodBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
+  periodActive: { backgroundColor: "rgba(255,255,255,0.2)" },
+  periodText: { color: "rgba(255,255,255,0.5)", fontSize: 12, fontWeight: "700" },
+  periodActiveText: { color: "#fff" },
+  balanceAmt: { color: "#fff", fontSize: 38, fontWeight: "900", marginVertical: 12 },
+  balanceBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-around", marginTop: 4 },
+  balanceStat: { flexDirection: "row", alignItems: "center", gap: 10 },
+  statDot: { width: 32, height: 32, borderRadius: 10, backgroundColor: "rgba(0,200,83,0.2)", justifyContent: "center", alignItems: "center" },
+  statLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "500" },
+  statAmt: { color: "#fff", fontSize: 15, fontWeight: "800" },
+
+  // Quick Actions
+  qaCard: { backgroundColor: C.card, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  qaRow: { flexDirection: "row", justifyContent: "space-around" },
+  qaItem: { alignItems: "center", width: 70 },
+  qaIcon: { width: 52, height: 52, borderRadius: 16, justifyContent: "center", alignItems: "center", marginBottom: 6 },
+  qaLabel: { fontSize: 11, fontWeight: "700", color: C.textDark },
+
+  // Sections
+  section: { marginTop: 24, paddingHorizontal: 16 },
+  sectionTitle: { color: "#fff", fontSize: 17, fontWeight: "800", marginBottom: 12 },
+
+  // Charts
+  chartWrap: { backgroundColor: C.card, borderRadius: 16, padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  legendRow: { flexDirection: "row", justifyContent: "center", gap: 20, marginTop: 8 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { color: "#999", fontSize: 12 },
+
+  // Transactions
+  txCard: { backgroundColor: C.card, borderRadius: 16, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  txRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
+  txBorder: { borderBottomWidth: 1, borderBottomColor: "#F5F5F5" },
+  txIcon: { width: 44, height: 44, borderRadius: 14, justifyContent: "center", alignItems: "center" },
+  txDesc: { color: C.textDark, fontSize: 14, fontWeight: "600" },
+  txDate: { color: "#999", fontSize: 12, marginTop: 2 },
+  txAmt: { fontSize: 15, fontWeight: "800" },
+  emptyBtn: { marginTop: 16, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: C.purple + "10" },
 });

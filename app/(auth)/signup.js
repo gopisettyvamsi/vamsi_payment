@@ -4,7 +4,7 @@ import { Text, TextInput, Button, HelperText } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
 import { supabase } from "../../lib/supabase";
-import { COLORS, SHADOWS, RADIUS } from "../../lib/theme";
+import { C } from "../../lib/theme";
 
 export default function Signup() {
   const [email, setEmail] = useState("");
@@ -17,82 +17,59 @@ export default function Signup() {
   const handleSignup = async () => {
     if (password !== confirmPassword) { setError("Passwords do not match"); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     const { error } = await supabase.auth.signUp({ email, password });
-    if (error) { setError(error.message); } else { setSuccess(true); }
+    if (error) setError(error.message); else setSuccess(true);
     setLoading(false);
   };
 
   if (success) {
     return (
-      <LinearGradient colors={["#0A0E21", "#1A1040", "#0A0E21"]} style={styles.gradient}>
-        <View style={[styles.container, styles.inner]}>
-          <View style={styles.successCard}>
-            <Text style={styles.successIcon}>✓</Text>
-            <Text style={styles.successTitle}>Check your email!</Text>
-            <Text style={styles.successText}>We sent a confirmation link to {email}</Text>
-            <Link href="/(auth)/login">
-              <Text style={styles.link}>Back to Login</Text>
-            </Link>
-          </View>
+      <LinearGradient colors={C.purpleDeep} style={{ flex: 1 }}>
+        <View style={[s.inner, { alignItems: "center" }]}>
+          <View style={s.successCircle}><Text style={{ fontSize: 40 }}>✓</Text></View>
+          <Text style={s.successTitle}>Check your email!</Text>
+          <Text style={s.successSub}>We sent a confirmation link to {email}</Text>
+          <Link href="/(auth)/login"><Text style={{ color: C.purpleLight, fontWeight: "700", fontSize: 16 }}>Back to Login</Text></Link>
         </View>
       </LinearGradient>
     );
   }
 
   return (
-    <LinearGradient colors={["#0A0E21", "#1A1040", "#0A0E21"]} style={styles.gradient}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
-      >
-        <View style={styles.inner}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Start tracking your finances</Text>
-          </View>
+    <LinearGradient colors={C.purpleDeep} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <View style={s.inner}>
+          <Text style={s.title}>Create Account</Text>
+          <Text style={s.subtitle}>Start tracking your finances</Text>
 
-          <View style={styles.card}>
-            <TextInput
-              label="Email" value={email} onChangeText={setEmail} mode="outlined"
-              keyboardType="email-address" autoCapitalize="none" style={styles.input}
-              textColor="#fff" outlineColor={COLORS.border} activeOutlineColor={COLORS.primary}
-              theme={{ colors: { onSurfaceVariant: COLORS.textMuted } }}
-            />
-            <TextInput
-              label="Password" value={password} onChangeText={setPassword} mode="outlined"
-              secureTextEntry style={styles.input} textColor="#fff"
-              outlineColor={COLORS.border} activeOutlineColor={COLORS.primary}
-              theme={{ colors: { onSurfaceVariant: COLORS.textMuted } }}
-            />
-            <TextInput
-              label="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword}
-              mode="outlined" secureTextEntry style={styles.input} textColor="#fff"
-              outlineColor={COLORS.border} activeOutlineColor={COLORS.primary}
-              theme={{ colors: { onSurfaceVariant: COLORS.textMuted } }}
-            />
+          <TextInput label="Email" value={email} onChangeText={setEmail} mode="flat"
+            keyboardType="email-address" autoCapitalize="none" style={s.input} textColor="#fff"
+            underlineColor={C.border} activeUnderlineColor={C.purpleLight}
+            theme={{ colors: { onSurfaceVariant: C.textMuted } }}
+            left={<TextInput.Icon icon="email" iconColor={C.textMuted} />} />
+          <TextInput label="Password" value={password} onChangeText={setPassword} mode="flat"
+            secureTextEntry style={s.input} textColor="#fff"
+            underlineColor={C.border} activeUnderlineColor={C.purpleLight}
+            theme={{ colors: { onSurfaceVariant: C.textMuted } }}
+            left={<TextInput.Icon icon="lock" iconColor={C.textMuted} />} />
+          <TextInput label="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword}
+            mode="flat" secureTextEntry style={s.input} textColor="#fff"
+            underlineColor={C.border} activeUnderlineColor={C.purpleLight}
+            theme={{ colors: { onSurfaceVariant: C.textMuted } }}
+            left={<TextInput.Icon icon="lock-check" iconColor={C.textMuted} />} />
 
-            {error ? <HelperText type="error" style={{ color: COLORS.danger }}>{error}</HelperText> : null}
+          {error ? <HelperText type="error" style={{ color: C.red }}>{error}</HelperText> : null}
 
-            <LinearGradient
-              colors={COLORS.gradientPrimary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={styles.btnGradient}
-            >
-              <Button mode="text" onPress={handleSignup} loading={loading} disabled={loading}
-                textColor="#fff" contentStyle={{ paddingVertical: 8 }}
-                labelStyle={{ fontSize: 16, fontWeight: "800", letterSpacing: 1 }}
-              >
-                Sign Up
-              </Button>
-            </LinearGradient>
+          <Button mode="contained" onPress={handleSignup} loading={loading} disabled={loading}
+            buttonColor={C.purple} textColor="#fff" style={s.btn} contentStyle={{ paddingVertical: 8 }}
+            labelStyle={{ fontWeight: "800", fontSize: 16, letterSpacing: 0.5 }}>
+            Create Account
+          </Button>
 
-            <View style={styles.linkRow}>
-              <Text style={styles.linkText}>Already have an account? </Text>
-              <Link href="/(auth)/login">
-                <Text style={styles.link}>Login</Text>
-              </Link>
-            </View>
+          <View style={s.linkRow}>
+            <Text style={{ color: C.textMuted }}>Already have an account? </Text>
+            <Link href="/(auth)/login"><Text style={{ color: C.purpleLight, fontWeight: "700" }}>Sign In</Text></Link>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -100,27 +77,14 @@ export default function Signup() {
   );
 }
 
-const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  container: { flex: 1 },
-  inner: { flex: 1, justifyContent: "center", padding: 24 },
-  header: { alignItems: "center", marginBottom: 32 },
-  title: { fontSize: 32, fontWeight: "900", color: "#fff", letterSpacing: 1 },
-  subtitle: { fontSize: 16, color: COLORS.textMuted, marginTop: 6 },
-  card: {
-    backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, padding: 24,
-    borderWidth: 1, borderColor: COLORS.border, ...SHADOWS.card,
-  },
-  input: { marginBottom: 14, backgroundColor: COLORS.bgInput, borderRadius: RADIUS.md },
-  btnGradient: { borderRadius: RADIUS.md, marginTop: 8, overflow: "hidden", ...SHADOWS.glow },
-  linkRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
-  linkText: { color: COLORS.textMuted, fontSize: 14 },
-  link: { color: COLORS.primaryLight, fontWeight: "bold", fontSize: 14 },
-  successCard: {
-    backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, padding: 40,
-    alignItems: "center", borderWidth: 1, borderColor: COLORS.border, ...SHADOWS.card,
-  },
-  successIcon: { fontSize: 48, color: COLORS.success, marginBottom: 16 },
-  successTitle: { fontSize: 24, fontWeight: "900", color: "#fff", marginBottom: 12 },
-  successText: { color: COLORS.textSecondary, textAlign: "center", marginBottom: 24, fontSize: 15 },
+const s = StyleSheet.create({
+  inner: { flex: 1, justifyContent: "center", paddingHorizontal: 28 },
+  title: { fontSize: 30, fontWeight: "900", color: "#fff", marginBottom: 4 },
+  subtitle: { fontSize: 14, color: C.textMuted, marginBottom: 36 },
+  input: { backgroundColor: "rgba(255,255,255,0.05)", marginBottom: 8, borderRadius: 12 },
+  btn: { marginTop: 16, borderRadius: 12 },
+  linkRow: { flexDirection: "row", justifyContent: "center", marginTop: 24 },
+  successCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: C.green, justifyContent: "center", alignItems: "center", marginBottom: 24 },
+  successTitle: { fontSize: 24, fontWeight: "900", color: "#fff", marginBottom: 8 },
+  successSub: { color: C.textMuted, textAlign: "center", marginBottom: 32, fontSize: 15, lineHeight: 22 },
 });

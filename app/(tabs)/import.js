@@ -1,212 +1,146 @@
 import { useState } from "react";
 import { View, ScrollView, StyleSheet, Platform, TouchableOpacity } from "react-native";
 /* global fetch */
-import { Text, Button, ProgressBar } from "react-native-paper";
-import { LinearGradient } from "expo-linear-gradient";
+import { Text, ProgressBar } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import Papa from "papaparse";
 import { supabase } from "../../lib/supabase";
 import { parseCSVRow, parseEmailTransaction } from "../../lib/helpers";
-import { showAlert, showMessage } from "../../lib/alert";
-import { COLORS, SHADOWS, RADIUS } from "../../lib/theme";
+import { showAlert } from "../../lib/alert";
+import { C } from "../../lib/theme";
 
 export default function Import() {
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState(null);
 
-  const handleCSVImport = async () => {
+  const handleCSV = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["text/csv", "text/comma-separated-values", "application/vnd.ms-excel"],
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled) return;
+      const r = await DocumentPicker.getDocumentAsync({ type: ["text/csv", "text/comma-separated-values", "application/vnd.ms-excel"], copyToCacheDirectory: true });
+      if (r.canceled) return;
       setImporting(true); setProgress(0); setResults(null);
-      const file = result.assets[0];
-      const content = await FileSystem.readAsStringAsync(file.uri);
+      const content = await FileSystem.readAsStringAsync(r.assets[0].uri);
       const parsed = Papa.parse(content, { header: true, skipEmptyLines: true });
-      if (parsed.errors.length > 0) showAlert("CSV Error", `Found ${parsed.errors.length} errors in the file`);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      let imported = 0, failed = 0;
-      const rows = parsed.data;
-      for (let i = 0; i < rows.length; i++) {
-        try {
-          const tx = parseCSVRow(rows[i]);
-          if (tx.amount > 0) { await supabase.from("transactions").insert({ ...tx, user_id: user.id, date: new Date(tx.date).toISOString() }); imported++; }
-          else failed++;
-        } catch { failed++; }
-        setProgress((i + 1) / rows.length);
+      let imp = 0, fail = 0;
+      for (let i = 0; i < parsed.data.length; i++) {
+        try { const tx = parseCSVRow(parsed.data[i]); if (tx.amount > 0) { await supabase.from("transactions").insert({ ...tx, user_id: user.id, date: new Date(tx.date).toISOString() }); imp++; } else fail++; }
+        catch { fail++; }
+        setProgress((i + 1) / parsed.data.length);
       }
-      setResults({ imported, failed, total: rows.length }); setImporting(false);
-    } catch { showAlert("Error", "Failed to import CSV file"); setImporting(false); }
+      setResults({ imported: imp, failed: fail, total: parsed.data.length }); setImporting(false);
+    } catch { showAlert("Error", "Failed to import CSV"); setImporting(false); }
   };
 
-  const handleGmailImport = async () => {
+  const handleGmail = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.provider_token) {
-        showAlert("Google Login Required", "Please log out and log back in with Google to grant Gmail access.", [{ text: "OK" }]);
-        return;
-      }
-      await fetchGmailTransactions(session.provider_token);
-    } catch { showAlert("Error", "Failed to connect to Gmail"); }
-  };
-
-  const fetchGmailTransactions = async (accessToken) => {
-    try {
-      setImporting(true); setProgress(0);
-      const searchQuery = "subject:(transaction OR debit OR credit OR payment) newer_than:30d";
-      const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(searchQuery)}&maxResults=50`, { headers: { Authorization: `Bearer ${accessToken}` } });
-      const data = await response.json();
-      if (!data.messages) { showAlert("No Emails", "No transaction emails found in the last 30 days"); setImporting(false); return; }
+      if (!session?.provider_token) { showAlert("Google Login Required", "Log out and log back in with Google to grant Gmail access."); return; }
+      setImporting(true); setProgress(0); setResults(null);
+      const q = "subject:(transaction OR debit OR credit OR payment) newer_than:30d";
+      const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=50`, { headers: { Authorization: `Bearer ${session.provider_token}` } });
+      const data = await res.json();
+      if (!data.messages) { showAlert("No Emails", "No transaction emails found"); setImporting(false); return; }
       const { data: { user } } = await supabase.auth.getUser();
-      let imported = 0, failed = 0;
+      let imp = 0, fail = 0;
       for (let i = 0; i < data.messages.length; i++) {
         try {
-          const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${data.messages[i].id}`, { headers: { Authorization: `Bearer ${accessToken}` } });
-          const msg = await msgRes.json();
-          const subject = msg.payload.headers.find(h => h.name === "Subject")?.value || "";
-          const body = msg.snippet || "";
-          const tx = parseEmailTransaction(subject, body);
-          if (tx && tx.amount > 0 && tx.type) { await supabase.from("transactions").insert({ ...tx, user_id: user.id }); imported++; }
-          else failed++;
-        } catch { failed++; }
+          const mr = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${data.messages[i].id}`, { headers: { Authorization: `Bearer ${session.provider_token}` } });
+          const msg = await mr.json();
+          const subj = msg.payload.headers.find(h => h.name === "Subject")?.value || "";
+          const tx = parseEmailTransaction(subj, msg.snippet || "");
+          if (tx?.amount > 0 && tx?.type) { await supabase.from("transactions").insert({ ...tx, user_id: user.id }); imp++; } else fail++;
+        } catch { fail++; }
         setProgress((i + 1) / data.messages.length);
       }
-      setResults({ imported, failed, total: data.messages.length }); setImporting(false);
-    } catch { showAlert("Error", "Failed to fetch Gmail messages"); setImporting(false); }
+      setResults({ imported: imp, failed: fail, total: data.messages.length }); setImporting(false);
+    } catch { showAlert("Error", "Failed to fetch Gmail"); setImporting(false); }
   };
 
-  const handleSMSImport = async () => {
-    if (Platform.OS !== "android") { showAlert("Android Only", "SMS import is only available on Android devices"); return; }
-    showAlert("SMS Import", "SMS import requires a custom development build.\n\n1. Run: npx expo prebuild\n2. Install react-native-get-sms-android\n3. Build custom APK", [{ text: "OK" }]);
+  const handleSMS = () => {
+    if (Platform.OS !== "android") { showAlert("Android Only", "SMS import only works on Android"); return; }
+    showAlert("Coming Soon", "SMS import requires a custom build. Use CSV or Gmail for now.");
   };
 
-  const ImportCard = ({ icon, iconColor, gradientColors, title, desc, btnText, onPress }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <LinearGradient colors={gradientColors} style={styles.iconBg}>
-          <MaterialCommunityIcons name={icon} size={24} color="#fff" />
-        </LinearGradient>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle}>{title}</Text>
-          <Text style={styles.cardDesc}>{desc}</Text>
+  const Card = ({ icon, color, title, desc, btnText, onPress }) => (
+    <TouchableOpacity onPress={onPress} disabled={importing} activeOpacity={0.7} style={s.card}>
+      <View style={s.cardRow}>
+        <View style={[s.iconBox, { backgroundColor: color + "18" }]}>
+          <MaterialCommunityIcons name={icon} size={28} color={color} />
         </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.cardTitle}>{title}</Text>
+          <Text style={s.cardDesc}>{desc}</Text>
+        </View>
+        <MaterialCommunityIcons name="chevron-right" size={24} color="#ddd" />
       </View>
-      <TouchableOpacity onPress={onPress} disabled={importing} activeOpacity={0.7}>
-        <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.cardBtn}>
-          <MaterialCommunityIcons name={icon} size={18} color="#fff" />
-          <Text style={styles.cardBtnText}>{btnText}</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>Import Transactions</Text>
-      <Text style={styles.subtitle}>Bring in your transactions from various sources</Text>
+    <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
+      <Text style={s.title}>Import</Text>
+      <Text style={s.subtitle}>Bring in transactions from external sources</Text>
 
-      <ImportCard icon="file-delimited" gradientColors={COLORS.gradientPurple}
-        title="CSV / Excel Import" desc="Upload bank statement CSV files"
-        btnText="Upload CSV File" onPress={handleCSVImport} />
-
-      <ImportCard icon="gmail" gradientColors={["#EA4335", "#FF6B6B"]}
-        title="Gmail Email Import" desc="Auto-detect transactions from bank emails"
-        btnText="Connect Gmail" onPress={handleGmailImport} />
-
-      <ImportCard icon="message-text" gradientColors={COLORS.gradientTeal}
-        title="SMS Import (Android)" desc="Auto-detect transactions from bank SMS"
-        btnText="Import from SMS" onPress={handleSMSImport} />
+      <Card icon="file-delimited-outline" color={C.purple} title="CSV File" desc="Upload bank statement" onPress={handleCSV} />
+      <Card icon="gmail" color="#EA4335" title="Gmail" desc="Auto-detect bank emails" onPress={handleGmail} />
+      <Card icon="message-text-outline" color={C.teal} title="SMS (Android)" desc="Read bank SMS alerts" onPress={handleSMS} />
 
       {importing && (
-        <View style={styles.progressCard}>
-          <Text style={styles.progressTitle}>Importing...</Text>
-          <ProgressBar progress={progress} color={COLORS.primary} style={styles.progressBar} />
-          <Text style={styles.progressText}>{Math.round(progress * 100)}% complete</Text>
+        <View style={s.progressCard}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
+            <Text style={{ color: C.textDark, fontWeight: "700" }}>Importing...</Text>
+            <Text style={{ color: C.purple, fontWeight: "800" }}>{Math.round(progress * 100)}%</Text>
+          </View>
+          <ProgressBar progress={progress} color={C.purple} style={{ height: 6, borderRadius: 3, backgroundColor: "#F0F0F5" }} />
         </View>
       )}
 
       {results && (
-        <LinearGradient colors={COLORS.gradientGreen} style={styles.resultsCard}>
-          <Text style={styles.resultsTitle}>Import Complete!</Text>
-          <View style={styles.resultsRow}>
-            <View style={styles.resultItem}>
-              <Text style={styles.resultNum}>{results.total}</Text>
-              <Text style={styles.resultLabel}>Total</Text>
-            </View>
-            <View style={styles.resultItem}>
-              <Text style={[styles.resultNum, { color: "#fff" }]}>{results.imported}</Text>
-              <Text style={styles.resultLabel}>Imported</Text>
-            </View>
-            <View style={styles.resultItem}>
-              <Text style={[styles.resultNum, { color: "rgba(255,255,255,0.6)" }]}>{results.failed}</Text>
-              <Text style={styles.resultLabel}>Skipped</Text>
-            </View>
+        <View style={s.resultCard}>
+          <MaterialCommunityIcons name="check-circle" size={40} color={C.green} style={{ alignSelf: "center", marginBottom: 12 }} />
+          <Text style={s.resultTitle}>Import Complete!</Text>
+          <View style={s.resultRow}>
+            <View style={s.resultItem}><Text style={s.resultNum}>{results.total}</Text><Text style={s.resultLabel}>Total</Text></View>
+            <View style={s.resultItem}><Text style={[s.resultNum, { color: C.green }]}>{results.imported}</Text><Text style={s.resultLabel}>Success</Text></View>
+            <View style={s.resultItem}><Text style={[s.resultNum, { color: C.red }]}>{results.failed}</Text><Text style={s.resultLabel}>Failed</Text></View>
           </View>
-        </LinearGradient>
+        </View>
       )}
 
-      {/* CSV Format Guide */}
-      <View style={styles.guideCard}>
-        <Text style={styles.guideTitle}>CSV Format Guide</Text>
-        <View style={styles.codeBlock}>
-          <Text style={styles.codeText}>
-            date,amount,type,category,description{"\n"}
-            2024-01-15,500,expense,food,Lunch{"\n"}
-            2024-01-16,50000,income,salary,January{"\n"}
-            2024-01-17,1200,expense,transport,Uber
-          </Text>
+      {/* CSV Guide */}
+      <View style={s.guideCard}>
+        <Text style={{ color: C.textDark, fontWeight: "700", marginBottom: 10, fontSize: 14 }}>CSV Format</Text>
+        <View style={s.codeBlock}>
+          <Text style={s.code}>date,amount,type,category,description{"\n"}2024-01-15,500,expense,food,Lunch{"\n"}2024-01-16,50000,income,salary,Jan</Text>
         </View>
       </View>
 
-      <View style={{ height: 100 }} />
+      <View style={{ height: 80 }} />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg, padding: 20 },
-  title: { color: "#fff", fontSize: 24, fontWeight: "900", letterSpacing: 0.3 },
-  subtitle: { color: COLORS.textMuted, fontSize: 14, marginBottom: 24, marginTop: 4 },
-  card: {
-    backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, padding: 20,
-    marginBottom: 16, borderWidth: 1, borderColor: COLORS.border, ...SHADOWS.soft,
-  },
-  cardHeader: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 },
-  iconBg: { width: 48, height: 48, borderRadius: 16, justifyContent: "center", alignItems: "center" },
-  cardTitle: { color: "#fff", fontSize: 16, fontWeight: "800" },
-  cardDesc: { color: COLORS.textMuted, fontSize: 13, marginTop: 2 },
-  cardBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, paddingVertical: 14, borderRadius: RADIUS.md,
-  },
-  cardBtnText: { color: "#fff", fontWeight: "800", fontSize: 14, letterSpacing: 0.3 },
-  progressCard: {
-    backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, padding: 20,
-    marginBottom: 16, borderWidth: 1, borderColor: COLORS.border,
-  },
-  progressTitle: { color: "#fff", fontWeight: "800", fontSize: 16, marginBottom: 12 },
-  progressBar: { height: 8, borderRadius: 4, backgroundColor: COLORS.bgInput },
-  progressText: { color: COLORS.textMuted, marginTop: 8, fontSize: 13 },
-  resultsCard: { borderRadius: RADIUS.lg, padding: 24, marginBottom: 16 },
-  resultsTitle: { color: "#fff", fontWeight: "900", fontSize: 18, marginBottom: 16, textAlign: "center" },
-  resultsRow: { flexDirection: "row", justifyContent: "space-around" },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.bg, padding: 16 },
+  title: { color: "#fff", fontSize: 24, fontWeight: "900" },
+  subtitle: { color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 20, marginTop: 4 },
+  card: { backgroundColor: C.card, borderRadius: 16, marginBottom: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  cardRow: { flexDirection: "row", alignItems: "center", padding: 18, gap: 14 },
+  iconBox: { width: 52, height: 52, borderRadius: 16, justifyContent: "center", alignItems: "center" },
+  cardTitle: { color: C.textDark, fontSize: 15, fontWeight: "700" },
+  cardDesc: { color: "#999", fontSize: 12, marginTop: 2 },
+  progressCard: { backgroundColor: C.card, borderRadius: 16, padding: 20, marginTop: 10, marginBottom: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  resultCard: { backgroundColor: C.card, borderRadius: 16, padding: 24, marginTop: 10, marginBottom: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  resultTitle: { color: C.textDark, fontWeight: "800", fontSize: 18, textAlign: "center", marginBottom: 16 },
+  resultRow: { flexDirection: "row", justifyContent: "space-around" },
   resultItem: { alignItems: "center" },
-  resultNum: { color: "#fff", fontSize: 28, fontWeight: "900" },
-  resultLabel: { color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 4, fontWeight: "600" },
-  guideCard: {
-    backgroundColor: COLORS.bgCard, borderRadius: RADIUS.lg, padding: 20,
-    borderWidth: 1, borderColor: COLORS.border,
-  },
-  guideTitle: { color: "#fff", fontWeight: "800", fontSize: 16, marginBottom: 12 },
-  codeBlock: {
-    backgroundColor: COLORS.bgInput, padding: 16, borderRadius: RADIUS.md,
-    borderWidth: 1, borderColor: COLORS.border,
-  },
-  codeText: { color: COLORS.textSecondary, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontSize: 12, lineHeight: 20 },
+  resultNum: { fontSize: 28, fontWeight: "900", color: C.textDark },
+  resultLabel: { color: "#999", fontSize: 11, fontWeight: "600", marginTop: 2 },
+  guideCard: { backgroundColor: C.card, borderRadius: 16, padding: 18, marginTop: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  codeBlock: { backgroundColor: "#F8F8FA", borderRadius: 12, padding: 14 },
+  code: { fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontSize: 11, color: "#666", lineHeight: 18 },
 });
