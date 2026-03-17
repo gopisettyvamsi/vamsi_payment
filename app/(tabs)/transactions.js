@@ -1,19 +1,46 @@
-import { useState, useEffect, useCallback } from "react";
-import { View, FlatList, StyleSheet, TouchableOpacity } from "react-native";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { View, SectionList, StyleSheet, TouchableOpacity, Animated, Platform } from "react-native";
 import { Text, Searchbar, IconButton, Menu } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Swipeable } from "react-native-gesture-handler";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
-import { formatCurrency, formatDate } from "../../lib/helpers";
+import { formatDate } from "../../lib/helpers";
 import { getCategoryById } from "../../lib/categories";
 import { showAlert } from "../../lib/alert";
 import { C } from "../../lib/theme";
+import { useCurrency, fmtCurrency } from "../../lib/CurrencyContext";
+
+const getDateLabel = (dateStr) => {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const txDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diff = (today - txDate) / 86400000;
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  if (diff < 7) return "This Week";
+  if (diff < 30) return "This Month";
+  return d.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+};
+
+const groupByDate = (txns) => {
+  const groups = {};
+  txns.forEach(t => {
+    const label = getDateLabel(t.date);
+    if (!groups[label]) groups[label] = [];
+    groups[label].push(t);
+  });
+  return Object.entries(groups).map(([title, data]) => ({ title, data }));
+};
 
 export default function Transactions() {
   const [txns, setTxns] = useState([]);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [menuVisible, setMenuVisible] = useState(null);
+  const { currency } = useCurrency();
+  const fmt = (amt) => fmtCurrency(amt, currency);
   const router = useRouter();
 
   const fetch_ = useCallback(async () => {
@@ -35,9 +62,27 @@ export default function Transactions() {
     ]);
   };
 
+  const sections = groupByDate(txns);
+
+  const renderRightActions = (progress, dragX, item) => {
+    const translateX = dragX.interpolate({ inputRange: [-160, 0], outputRange: [0, 160] });
+    return (
+      <Animated.View style={[s.swipeActions, { transform: [{ translateX }] }]}>
+        <TouchableOpacity onPress={() => router.push({ pathname: "/(tabs)/add", params: { editId: item.id } })} style={[s.swipeBtn, { backgroundColor: C.blue }]}>
+          <MaterialCommunityIcons name="pencil" size={22} color="#fff" />
+          <Text style={s.swipeBtnText}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => del(item.id)} style={[s.swipeBtn, { backgroundColor: C.red }]}>
+          <MaterialCommunityIcons name="delete" size={22} color="#fff" />
+          <Text style={s.swipeBtnText}>Delete</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
+
   const renderItem = ({ item }) => {
     const cat = getCategoryById(item.category);
-    return (
+    const card = (
       <View style={s.txCard}>
         <View style={s.txRow}>
           <View style={[s.txIcon, { backgroundColor: cat.color + "18" }]}>
@@ -51,7 +96,7 @@ export default function Transactions() {
             </View>
           </View>
           <Text style={[s.txAmt, { color: item.type === "income" ? C.green : C.textDark }]}>
-            {item.type === "income" ? "+" : "-"} {formatCurrency(item.amount)}
+            {item.type === "income" ? "+" : "-"} {fmt(item.amount)}
           </Text>
           <Menu visible={menuVisible === item.id} onDismiss={() => setMenuVisible(null)}
             contentStyle={{ backgroundColor: C.card }}
@@ -62,7 +107,22 @@ export default function Transactions() {
         </View>
       </View>
     );
+
+    if (Platform.OS === "web") return card;
+
+    return (
+      <Swipeable renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
+        overshootRight={false} friction={2}>
+        {card}
+      </Swipeable>
+    );
   };
+
+  const renderSectionHeader = ({ section: { title } }) => (
+    <View style={s.sectionHeader}>
+      <Text style={s.sectionTitle}>{title}</Text>
+    </View>
+  );
 
   return (
     <View style={s.container}>
@@ -79,14 +139,21 @@ export default function Transactions() {
         ))}
       </View>
 
-      <FlatList data={txns} renderItem={renderItem} keyExtractor={i => i.id}
-        contentContainerStyle={{ paddingBottom: 80 }} showsVerticalScrollIndicator={false}
+      <SectionList
+        sections={sections}
+        renderItem={renderItem}
+        renderSectionHeader={renderSectionHeader}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingBottom: 80 }}
+        showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={false}
         ListEmptyComponent={
           <View style={{ alignItems: "center", paddingVertical: 60 }}>
             <MaterialCommunityIcons name="magnify" size={48} color="rgba(255,255,255,0.2)" />
             <Text style={{ color: "rgba(255,255,255,0.4)", marginTop: 12, fontWeight: "600" }}>No transactions found</Text>
           </View>
-        } />
+        }
+      />
     </View>
   );
 }
@@ -99,6 +166,8 @@ const s = StyleSheet.create({
   filterActive: { backgroundColor: C.purple, borderColor: C.purple },
   filterText: { color: "rgba(255,255,255,0.5)", fontWeight: "700", fontSize: 13 },
   filterActiveText: { color: "#fff" },
+  sectionHeader: { paddingVertical: 8, paddingHorizontal: 4 },
+  sectionTitle: { color: "rgba(255,255,255,0.5)", fontSize: 13, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 },
   txCard: { backgroundColor: C.card, borderRadius: 14, marginBottom: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 },
   txRow: { flexDirection: "row", alignItems: "center", padding: 14, gap: 12 },
   txIcon: { width: 44, height: 44, borderRadius: 14, justifyContent: "center", alignItems: "center" },
@@ -107,4 +176,7 @@ const s = StyleSheet.create({
   srcChip: { backgroundColor: "#F5F5F5", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   srcText: { color: "#999", fontSize: 9, fontWeight: "700", textTransform: "uppercase" },
   txAmt: { fontSize: 15, fontWeight: "800" },
+  swipeActions: { flexDirection: "row", alignItems: "center", marginBottom: 8, borderRadius: 14, overflow: "hidden" },
+  swipeBtn: { width: 75, height: "100%", justifyContent: "center", alignItems: "center" },
+  swipeBtnText: { color: "#fff", fontSize: 11, fontWeight: "700", marginTop: 4 },
 });

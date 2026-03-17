@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
-import { View, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
+import { useState, useEffect, useRef } from "react";
+import { View, ScrollView, StyleSheet, TouchableOpacity, Animated, Modal } from "react-native";
 import { Text, TextInput, Button } from "react-native-paper";
+import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
@@ -17,6 +18,9 @@ export default function AddTransaction() {
   const [category, setCategory] = useState("other");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [loading, setLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const successScale = useRef(new Animated.Value(0)).current;
+  const successOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => { if (editId) load(); }, [editId]);
 
@@ -34,7 +38,20 @@ export default function AddTransaction() {
     const { error } = editId ? await supabase.from("transactions").update(tx).eq("id", editId) : await supabase.from("transactions").insert(tx);
     setLoading(false);
     if (error) showMessage("Error", error.message);
-    else showMessage("Success", editId ? "Updated!" : "Added!", () => { setAmount(""); setDescription(""); setCategory("other"); if (editId) router.back(); });
+    else {
+      if (editId) { showMessage("Success", "Updated!"); router.back(); return; }
+      setShowSuccess(true);
+      successScale.setValue(0); successOpacity.setValue(1);
+      Animated.sequence([
+        Animated.spring(successScale, { toValue: 1, friction: 4, tension: 80, useNativeDriver: true }),
+        Animated.delay(1200),
+        Animated.timing(successOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+      ]).start(() => {
+        setShowSuccess(false);
+        setAmount(""); setDescription(""); setCategory("other");
+        setDate(new Date().toISOString().split("T")[0]);
+      });
+    }
   };
 
   const incCats = CATEGORIES.filter(c => ["salary", "freelance", "investment", "other"].includes(c.id));
@@ -109,6 +126,18 @@ export default function AddTransaction() {
       </TouchableOpacity>
 
       <View style={{ height: 80 }} />
+
+      {/* Success Overlay */}
+      {showSuccess && (
+        <Animated.View style={[s.successOverlay, { opacity: successOpacity }]}>
+          <Animated.View style={[s.successCircle, { transform: [{ scale: successScale }] }]}>
+            <MaterialCommunityIcons name="check" size={48} color="#fff" />
+          </Animated.View>
+          <Animated.Text style={[s.successText, { transform: [{ scale: successScale }] }]}>
+            Transaction Added!
+          </Animated.Text>
+        </Animated.View>
+      )}
     </ScrollView>
   );
 }
@@ -133,4 +162,7 @@ const s = StyleSheet.create({
   catLabel: { fontSize: 10, fontWeight: "600", color: C.textDark, textAlign: "center" },
   saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 14 },
   saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", zIndex: 100 },
+  successCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: "#00C853", justifyContent: "center", alignItems: "center", marginBottom: 20, shadowColor: "#00C853", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 12 },
+  successText: { color: "#fff", fontSize: 22, fontWeight: "900" },
 });

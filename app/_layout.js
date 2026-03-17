@@ -4,6 +4,9 @@ import { PaperProvider, MD3DarkTheme } from "react-native-paper";
 import { StatusBar } from "react-native";
 import { supabase } from "../lib/supabase";
 import { C } from "../lib/theme";
+import ResponsiveContainer from "../lib/ResponsiveContainer";
+import { CurrencyProvider } from "../lib/CurrencyContext";
+import Splash from "./(auth)/splash";
 
 const theme = {
   ...MD3DarkTheme,
@@ -23,6 +26,7 @@ const theme = {
 export default function RootLayout() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
   const segments = useSegments();
   const router = useRouter();
 
@@ -38,18 +42,30 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || showSplash) return;
     const inAuthGroup = segments[0] === "(auth)";
     if (!session && !inAuthGroup) router.replace("/(auth)/login");
     else if (session && inAuthGroup) router.replace("/(tabs)");
-  }, [session, segments, loading]);
+  }, [session, segments, loading, showSplash]);
+
+  if (showSplash) {
+    return (
+      <ResponsiveContainer>
+        <Splash onFinish={() => setShowSplash(false)} />
+      </ResponsiveContainer>
+    );
+  }
 
   if (loading) return null;
 
   return (
     <PaperProvider theme={theme}>
-      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-      <Slot />
+      <CurrencyProvider>
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <ResponsiveContainer>
+          <Slot />
+        </ResponsiveContainer>
+      </CurrencyProvider>
     </PaperProvider>
   );
 }

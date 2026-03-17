@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { View, StyleSheet, KeyboardAvoidingView, Platform, Image } from "react-native";
+import { View, StyleSheet, KeyboardAvoidingView, Platform, Image as RNImage } from "react-native";
 import { Text, TextInput, Button, HelperText } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { C } from "../../lib/theme";
+
+const logo = require("../../assets/logo.png");
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -42,10 +44,8 @@ export default function Login() {
         <View style={s.inner}>
           {/* Logo */}
           <View style={s.logoWrap}>
-            <View style={s.logo}>
-              <Text style={s.logoText}>₹</Text>
-            </View>
-            <Text style={s.brand}>PayTracker</Text>
+            <RNImage source={logo} style={s.logoImg} resizeMode="contain" />
+            <Text style={s.brand}>Vamsify</Text>
             <Text style={s.tagline}>Smart money tracking</Text>
           </View>
 
@@ -99,9 +99,8 @@ export default function Login() {
 const s = StyleSheet.create({
   inner: { flex: 1, justifyContent: "center", paddingHorizontal: 28 },
   logoWrap: { alignItems: "center", marginBottom: 48 },
-  logo: { width: 80, height: 80, borderRadius: 24, backgroundColor: C.purple, justifyContent: "center", alignItems: "center", marginBottom: 16, shadowColor: C.purple, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 16, elevation: 12 },
-  logoText: { fontSize: 40, fontWeight: "900", color: "#fff" },
-  brand: { fontSize: 30, fontWeight: "900", color: "#fff", letterSpacing: 1 },
+  logoImg: { width: 100, height: 100, borderRadius: 50, marginBottom: 16 },
+  brand: { fontSize: 32, fontWeight: "900", color: "#fff", letterSpacing: 2 },
   tagline: { fontSize: 14, color: C.textMuted, marginTop: 4 },
   googleBtn: { marginBottom: 4 },
   orRow: { flexDirection: "row", alignItems: "center", marginVertical: 20 },

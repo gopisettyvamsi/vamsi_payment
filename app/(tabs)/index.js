@@ -6,17 +6,26 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LineChart, PieChart } from "react-native-chart-kit";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
-import { formatCurrency, getMonthName } from "../../lib/helpers";
+import { getMonthName } from "../../lib/helpers";
 import { getCategoryById } from "../../lib/categories";
 import { C } from "../../lib/theme";
+import { SkeletonBalance, SkeletonCard } from "../../lib/Skeleton";
+import { getItem, KEYS } from "../../lib/storage";
+import { useCurrency, fmtCurrency } from "../../lib/CurrencyContext";
 
 const W = Dimensions.get("window").width;
 
 export default function Dashboard() {
   const [txns, setTxns] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [period, setPeriod] = useState("month");
+  const [budget, setBudget] = useState(0);
+  const { currency } = useCurrency();
+  const fmt = (amt) => fmtCurrency(amt, currency);
   const router = useRouter();
+
+  useEffect(() => { getItem(KEYS.BUDGET, 0).then(b => setBudget(b || 0)); }, []);
 
   const fetch_ = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -29,6 +38,7 @@ export default function Dashboard() {
     const { data } = await supabase.from("transactions").select("*")
       .eq("user_id", user.id).gte("date", start.toISOString()).order("date", { ascending: false });
     setTxns(data || []);
+    setIsLoading(false);
   }, [period]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
@@ -76,8 +86,18 @@ export default function Dashboard() {
     <ScrollView style={s.container} showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.purple} />}>
 
+      {/* Skeleton Loading */}
+      {isLoading && (
+        <View>
+          <SkeletonBalance />
+          <View style={{ marginTop: 16, paddingHorizontal: 16 }}>
+            <SkeletonCard /><SkeletonCard /><SkeletonCard />
+          </View>
+        </View>
+      )}
+
       {/* Balance Card */}
-      <LinearGradient colors={["#5F259F", "#7B3FBF", "#9B59D0"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.balanceCard}>
+      {!isLoading && <LinearGradient colors={["#5F259F", "#7B3FBF", "#9B59D0"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.balanceCard}>
         <View style={s.balanceTop}>
           <Text style={s.balanceLabel}>Total Balance</Text>
           <View style={s.periodRow}>
@@ -91,13 +111,13 @@ export default function Dashboard() {
             ))}
           </View>
         </View>
-        <Text style={s.balanceAmt}>{formatCurrency(balance)}</Text>
+        <Text style={s.balanceAmt}>{fmt(balance)}</Text>
         <View style={s.balanceBottom}>
           <View style={s.balanceStat}>
             <View style={s.statDot}><MaterialCommunityIcons name="arrow-down" size={14} color={C.green} /></View>
             <View>
               <Text style={s.statLabel}>Income</Text>
-              <Text style={s.statAmt}>{formatCurrency(income)}</Text>
+              <Text style={s.statAmt}>{fmt(income)}</Text>
             </View>
           </View>
           <View style={{ width: 1, height: 36, backgroundColor: "rgba(255,255,255,0.15)" }} />
@@ -107,11 +127,11 @@ export default function Dashboard() {
             </View>
             <View>
               <Text style={s.statLabel}>Expense</Text>
-              <Text style={s.statAmt}>{formatCurrency(expense)}</Text>
+              <Text style={s.statAmt}>{fmt(expense)}</Text>
             </View>
           </View>
         </View>
-      </LinearGradient>
+      </LinearGradient>}
 
       {/* Quick Actions */}
       <View style={s.qaCard}>
@@ -122,6 +142,31 @@ export default function Dashboard() {
           <QuickAction icon="download-outline" label="Export" color={C.orange} onPress={() => router.push("/(tabs)/settings")} />
         </View>
       </View>
+
+      {/* Budget Progress */}
+      {budget > 0 && !isLoading && (
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Monthly Budget</Text>
+          <View style={s.budgetCard}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
+              <Text style={{ color: C.textDark, fontWeight: "700" }}>Spent</Text>
+              <Text style={{ color: C.textDark, fontWeight: "800" }}>
+                {fmt(expense)} / {fmt(budget)}
+              </Text>
+            </View>
+            <View style={s.budgetBarBg}>
+              <LinearGradient
+                colors={expense / budget > 0.9 ? [C.red, "#FF6B6B"] : expense / budget > 0.7 ? [C.orange, "#FFB347"] : [C.green, "#34D399"]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={[s.budgetBarFill, { width: `${Math.min((expense / budget) * 100, 100)}%` }]}
+              />
+            </View>
+            <Text style={{ color: "#999", fontSize: 12, marginTop: 8, textAlign: "center" }}>
+              {expense >= budget ? "Budget exceeded!" : `${fmt(budget - expense)} remaining`}
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Monthly Trend */}
       {txns.length > 0 && (
@@ -180,7 +225,7 @@ export default function Dashboard() {
                   <Text style={s.txDate}>{new Date(t.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</Text>
                 </View>
                 <Text style={[s.txAmt, { color: t.type === "income" ? C.green : C.textDark }]}>
-                  {t.type === "income" ? "+" : "-"} {formatCurrency(t.amount)}
+                  {t.type === "income" ? "+" : "-"} {fmt(t.amount)}
                 </Text>
               </View>
             );
@@ -248,4 +293,9 @@ const s = StyleSheet.create({
   txDate: { color: "#999", fontSize: 12, marginTop: 2 },
   txAmt: { fontSize: 15, fontWeight: "800" },
   emptyBtn: { marginTop: 16, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: C.purple + "10" },
+
+  // Budget
+  budgetCard: { backgroundColor: C.card, borderRadius: 16, padding: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  budgetBarBg: { height: 10, borderRadius: 5, backgroundColor: "#F0F0F5", overflow: "hidden" },
+  budgetBarFill: { height: 10, borderRadius: 5 },
 });
