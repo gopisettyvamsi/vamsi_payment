@@ -1,15 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { View, SectionList, StyleSheet, TouchableOpacity, Animated, Platform } from "react-native";
+import { View, SectionList, StyleSheet, TouchableOpacity, Animated, Platform, Image } from "react-native";
 import { Text, Searchbar, IconButton, Menu } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { formatDate } from "../../lib/helpers";
 import { getCategoryById } from "../../lib/categories";
 import { showAlert } from "../../lib/alert";
-import { C } from "../../lib/theme";
+import { useTheme } from "../../lib/ThemeContext";
 import { useCurrency, fmtCurrency } from "../../lib/CurrencyContext";
+import { detectBrand, getBrandLogoUrl } from "../../lib/brands";
+import { getMerchantLogoUrl } from "../../lib/merchantLogos";
 
 const getDateLabel = (dateStr) => {
   const d = new Date(dateStr);
@@ -34,10 +36,31 @@ const groupByDate = (txns) => {
   return Object.entries(groups).map(([title, data]) => ({ title, data }));
 };
 
+const DATE_RANGES = [
+  { key: "all", label: "All Time" },
+  { key: "7d", label: "7 Days" },
+  { key: "30d", label: "30 Days" },
+  { key: "90d", label: "3 Months" },
+  { key: "year", label: "This Year" },
+];
+
+const getDateFrom = (rangeKey) => {
+  const now = new Date();
+  // Use start of day (midnight) for clean date boundaries
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+  if (rangeKey === "7d") { const d = new Date(now); d.setDate(d.getDate() - 7); return startOfDay(d); }
+  if (rangeKey === "30d") { const d = new Date(now); d.setDate(d.getDate() - 30); return startOfDay(d); }
+  if (rangeKey === "90d") { const d = new Date(now); d.setDate(d.getDate() - 90); return startOfDay(d); }
+  if (rangeKey === "year") return new Date(now.getFullYear(), 0, 1).toISOString();
+  return null;
+};
+
 export default function Transactions() {
+  const { theme } = useTheme();
   const [txns, setTxns] = useState([]);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
+  const [dateRange, setDateRange] = useState("all");
   const [menuVisible, setMenuVisible] = useState(null);
   const { currency } = useCurrency();
   const fmt = (amt) => fmtCurrency(amt, currency);
@@ -49,11 +72,14 @@ export default function Transactions() {
     let q = supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false });
     if (filterType !== "all") q = q.eq("type", filterType);
     if (search) q = q.ilike("description", `%${search}%`);
-    const { data } = await q.limit(100);
+    const dateFrom = getDateFrom(dateRange);
+    if (dateFrom) q = q.gte("date", dateFrom);
+    const { data } = await q.limit(500);
     setTxns(data || []);
-  }, [search, filterType]);
+  }, [search, filterType, dateRange]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
+  useFocusEffect(useCallback(() => { fetch_(); }, [fetch_]));
 
   const del = async (id) => {
     showAlert("Delete", "Delete this transaction?", [
@@ -68,48 +94,58 @@ export default function Transactions() {
     const translateX = dragX.interpolate({ inputRange: [-160, 0], outputRange: [0, 160] });
     return (
       <Animated.View style={[s.swipeActions, { transform: [{ translateX }] }]}>
-        <TouchableOpacity onPress={() => router.push({ pathname: "/(tabs)/add", params: { editId: item.id } })} style={[s.swipeBtn, { backgroundColor: C.blue }]}>
-          <MaterialCommunityIcons name="pencil" size={22} color="#fff" />
+        <TouchableOpacity onPress={() => router.push({ pathname: "/(tabs)/add", params: { editId: item.id } })}
+          style={[s.swipeBtn, { backgroundColor: theme.blue }]}>
+          <MaterialCommunityIcons name="pencil-outline" size={20} color="#fff" />
           <Text style={s.swipeBtnText}>Edit</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => del(item.id)} style={[s.swipeBtn, { backgroundColor: C.red }]}>
-          <MaterialCommunityIcons name="delete" size={22} color="#fff" />
+        <TouchableOpacity onPress={() => del(item.id)} style={[s.swipeBtn, { backgroundColor: theme.red }]}>
+          <MaterialCommunityIcons name="trash-can-outline" size={20} color="#fff" />
           <Text style={s.swipeBtnText}>Delete</Text>
         </TouchableOpacity>
       </Animated.View>
     );
   };
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item, index, section }) => {
     const cat = getCategoryById(item.category);
+    const brand = detectBrand(item.description);
+    const logoUrl = brand ? getBrandLogoUrl(brand.domain) : getMerchantLogoUrl(item.description);
+    const iconColor = brand?.color || cat.color;
+    const initial = brand?.name?.[0] || (item.description || cat.label)[0]?.toUpperCase() || "?";
+    const isLast = index === section.data.length - 1;
+
     const card = (
-      <View style={s.txCard}>
-        <View style={s.txRow}>
-          <View style={[s.txIcon, { backgroundColor: cat.color + "18" }]}>
-            <MaterialCommunityIcons name={cat.icon} size={22} color={cat.color} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.txDesc}>{item.description || cat.label}</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 }}>
-              <Text style={s.txDate}>{formatDate(item.date)}</Text>
-              <View style={s.srcChip}><Text style={s.srcText}>{item.source}</Text></View>
+      <View style={[s.txRow, !isLast && { borderBottomWidth: 1, borderBottomColor: theme.divider }]}>
+        <View style={[s.txIcon, { backgroundColor: iconColor + "12" }]}>
+          {logoUrl ? (
+            <Image source={{ uri: logoUrl }} style={{ width: 24, height: 24, borderRadius: 4 }} resizeMode="contain" />
+          ) : (
+            <Text style={{ color: iconColor, fontWeight: "700", fontSize: 15 }}>{initial}</Text>
+          )}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[s.txDesc, { color: theme.text }]} numberOfLines={1}>{brand?.name || item.description || cat.label}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 }}>
+            <Text style={{ color: theme.textMuted, fontSize: 11 }}>{formatDate(item.date)}</Text>
+            <View style={[s.srcChip, { backgroundColor: theme.surface }]}>
+              <Text style={{ color: theme.textMuted, fontSize: 9, fontWeight: "700", textTransform: "uppercase" }}>{item.source}</Text>
             </View>
           </View>
-          <Text style={[s.txAmt, { color: item.type === "income" ? C.green : C.textDark }]}>
-            {item.type === "income" ? "+" : "-"} {fmt(item.amount)}
-          </Text>
-          <Menu visible={menuVisible === item.id} onDismiss={() => setMenuVisible(null)}
-            contentStyle={{ backgroundColor: C.card }}
-            anchor={<IconButton icon="dots-vertical" size={18} iconColor="#999" onPress={() => setMenuVisible(item.id)} />}>
-            <Menu.Item onPress={() => { setMenuVisible(null); router.push({ pathname: "/(tabs)/add", params: { editId: item.id } }); }} title="Edit" leadingIcon="pencil" />
-            <Menu.Item onPress={() => { setMenuVisible(null); del(item.id); }} title="Delete" leadingIcon="delete" titleStyle={{ color: C.red }} />
-          </Menu>
         </View>
+        <Text style={[s.txAmt, { color: item.type === "income" ? theme.green : theme.red }]}>
+          {item.type === "income" ? "+" : "-"} {fmt(item.amount)}
+        </Text>
+        <Menu visible={menuVisible === item.id} onDismiss={() => setMenuVisible(null)}
+          contentStyle={{ backgroundColor: theme.card }}
+          anchor={<IconButton icon="dots-vertical" size={16} iconColor={theme.textDim} onPress={() => setMenuVisible(item.id)} style={{ margin: 0 }} />}>
+          <Menu.Item onPress={() => { setMenuVisible(null); router.push({ pathname: "/(tabs)/add", params: { editId: item.id } }); }} title="Edit" leadingIcon="pencil-outline" />
+          <Menu.Item onPress={() => { setMenuVisible(null); del(item.id); }} title="Delete" leadingIcon="trash-can-outline" titleStyle={{ color: theme.red }} />
+        </Menu>
       </View>
     );
 
     if (Platform.OS === "web") return card;
-
     return (
       <Swipeable renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
         overshootRight={false} friction={2}>
@@ -120,27 +156,49 @@ export default function Transactions() {
 
   const renderSectionHeader = ({ section: { title } }) => (
     <View style={s.sectionHeader}>
-      <Text style={s.sectionTitle}>{title}</Text>
+      <Text style={[s.sectionLabel, { color: theme.textMuted }]}>{title}</Text>
     </View>
   );
 
   return (
-    <View style={s.container}>
-      <Searchbar placeholder="Search..." value={search} onChangeText={setSearch}
-        style={s.search} inputStyle={{ color: C.textDark, fontSize: 14 }}
-        iconColor="#999" placeholderTextColor="#999" />
+    <View style={[s.container, { backgroundColor: theme.bg }]}>
+      {/* Search */}
+      <Searchbar placeholder="Search transactions..." value={search} onChangeText={setSearch}
+        style={[s.search, { backgroundColor: theme.card, borderColor: theme.surfaceBorder }]}
+        inputStyle={{ color: theme.text, fontSize: 14 }}
+        iconColor={theme.textMuted} placeholderTextColor={theme.textDim} />
 
+      {/* Type Filter */}
       <View style={s.filterRow}>
         {[["all", "All"], ["income", "Income"], ["expense", "Expense"]].map(([k, v]) => (
           <TouchableOpacity key={k} onPress={() => setFilterType(k)} activeOpacity={0.7}
-            style={[s.filterChip, filterType === k && s.filterActive]}>
-            <Text style={[s.filterText, filterType === k && s.filterActiveText]}>{v}</Text>
+            style={[s.filterChip, { backgroundColor: theme.surface },
+              filterType === k && { backgroundColor: theme.accent }]}>
+            <Text style={[s.filterText, { color: theme.textMuted },
+              filterType === k && { color: "#fff" }]}>{v}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
+      {/* Date Range Filter */}
+      <View style={s.dateFilterRow}>
+        {DATE_RANGES.map(({ key, label }) => (
+          <TouchableOpacity key={key} onPress={() => setDateRange(key)} activeOpacity={0.7}
+            style={[s.dateChip, { borderColor: theme.surfaceBorder },
+              dateRange === key && { backgroundColor: theme.accent, borderColor: theme.accent }]}>
+            <Text style={[s.dateChipText, { color: theme.textMuted },
+              dateRange === key && { color: "#fff" }]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Result count */}
+      <Text style={[s.resultCount, { color: theme.textMuted }]}>{txns.length} transaction{txns.length !== 1 ? "s" : ""}</Text>
+
+      {/* List */}
       <SectionList
         sections={sections}
+        extraData={[filterType, dateRange, search]}
         renderItem={renderItem}
         renderSectionHeader={renderSectionHeader}
         keyExtractor={(item) => item.id}
@@ -149,8 +207,8 @@ export default function Transactions() {
         stickySectionHeadersEnabled={false}
         ListEmptyComponent={
           <View style={{ alignItems: "center", paddingVertical: 60 }}>
-            <MaterialCommunityIcons name="magnify" size={48} color="rgba(255,255,255,0.2)" />
-            <Text style={{ color: "rgba(255,255,255,0.4)", marginTop: 12, fontWeight: "600" }}>No transactions found</Text>
+            <MaterialCommunityIcons name="magnify" size={40} color={theme.textDim} />
+            <Text style={{ color: theme.textMuted, marginTop: 12, fontWeight: "600", fontSize: 14 }}>No transactions found</Text>
           </View>
         }
       />
@@ -159,24 +217,23 @@ export default function Transactions() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg, padding: 16 },
-  search: { backgroundColor: C.card, borderRadius: 14, elevation: 2, marginBottom: 12, height: 48 },
+  container: { flex: 1, padding: 16 },
+  search: { borderRadius: 14, elevation: 0, marginBottom: 12, height: 46, borderWidth: 1 },
   filterRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
-  filterChip: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: C.border },
-  filterActive: { backgroundColor: C.purple, borderColor: C.purple },
-  filterText: { color: "rgba(255,255,255,0.5)", fontWeight: "700", fontSize: 13 },
-  filterActiveText: { color: "#fff" },
+  filterChip: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 8 },
+  filterText: { fontWeight: "700", fontSize: 12 },
+  dateFilterRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
+  dateChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  dateChipText: { fontWeight: "600", fontSize: 11 },
+  resultCount: { fontSize: 11, fontWeight: "600", marginBottom: 8 },
   sectionHeader: { paddingVertical: 8, paddingHorizontal: 4 },
-  sectionTitle: { color: "rgba(255,255,255,0.5)", fontSize: 13, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 },
-  txCard: { backgroundColor: C.card, borderRadius: 14, marginBottom: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 },
-  txRow: { flexDirection: "row", alignItems: "center", padding: 14, gap: 12 },
-  txIcon: { width: 44, height: 44, borderRadius: 14, justifyContent: "center", alignItems: "center" },
-  txDesc: { color: C.textDark, fontSize: 14, fontWeight: "600" },
-  txDate: { color: "#999", fontSize: 11 },
-  srcChip: { backgroundColor: "#F5F5F5", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  srcText: { color: "#999", fontSize: 9, fontWeight: "700", textTransform: "uppercase" },
-  txAmt: { fontSize: 15, fontWeight: "800" },
-  swipeActions: { flexDirection: "row", alignItems: "center", marginBottom: 8, borderRadius: 14, overflow: "hidden" },
-  swipeBtn: { width: 75, height: "100%", justifyContent: "center", alignItems: "center" },
-  swipeBtnText: { color: "#fff", fontSize: 11, fontWeight: "700", marginTop: 4 },
+  sectionLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" },
+  txRow: { flexDirection: "row", alignItems: "center", paddingVertical: 13, paddingHorizontal: 4, gap: 12 },
+  txIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  txDesc: { fontSize: 14, fontWeight: "600" },
+  txAmt: { fontSize: 14, fontWeight: "700" },
+  srcChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  swipeActions: { flexDirection: "row", alignItems: "center", borderRadius: 12, overflow: "hidden" },
+  swipeBtn: { width: 72, height: "100%", justifyContent: "center", alignItems: "center" },
+  swipeBtnText: { color: "#fff", fontSize: 10, fontWeight: "700", marginTop: 3 },
 });

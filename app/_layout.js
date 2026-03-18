@@ -1,34 +1,36 @@
 import { useEffect, useState } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
-import { PaperProvider, MD3DarkTheme } from "react-native-paper";
+import { PaperProvider, MD3DarkTheme, MD3LightTheme } from "react-native-paper";
 import { StatusBar } from "react-native";
 import { supabase } from "../lib/supabase";
-import { C } from "../lib/theme";
+import { setItem, KEYS } from "../lib/storage";
+import { ThemeProvider, useTheme } from "../lib/ThemeContext";
 import ResponsiveContainer from "../lib/ResponsiveContainer";
 import { CurrencyProvider } from "../lib/CurrencyContext";
 import Splash from "./(auth)/splash";
 
-const theme = {
-  ...MD3DarkTheme,
-  colors: {
-    ...MD3DarkTheme.colors,
-    primary: C.purple,
-    secondary: C.green,
-    background: C.bg,
-    surface: C.bgLight,
-    onSurface: "#fff",
-    onSurfaceVariant: C.textLight,
-    outline: C.border,
-  },
-  roundness: 12,
-};
-
-export default function RootLayout() {
+function InnerLayout() {
+  const { theme, isDark } = useTheme();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
   const segments = useSegments();
   const router = useRouter();
+
+  const paperTheme = {
+    ...(isDark ? MD3DarkTheme : MD3LightTheme),
+    colors: {
+      ...(isDark ? MD3DarkTheme : MD3LightTheme).colors,
+      primary: theme.accent,
+      secondary: theme.green,
+      background: theme.bg,
+      surface: theme.card,
+      onSurface: theme.text,
+      onSurfaceVariant: theme.textSecondary,
+      outline: theme.border,
+    },
+    roundness: 12,
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -37,6 +39,10 @@ export default function RootLayout() {
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      // Store Google provider token when available (only present right after OAuth login)
+      if (session?.provider_token) {
+        setItem(KEYS.GOOGLE_TOKEN, session.provider_token);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -59,13 +65,21 @@ export default function RootLayout() {
   if (loading) return null;
 
   return (
-    <PaperProvider theme={theme}>
+    <PaperProvider theme={paperTheme}>
       <CurrencyProvider>
-        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <StatusBar barStyle={theme.statusBar} backgroundColor={theme.bg} />
         <ResponsiveContainer>
           <Slot />
         </ResponsiveContainer>
       </CurrencyProvider>
     </PaperProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <InnerLayout />
+    </ThemeProvider>
   );
 }

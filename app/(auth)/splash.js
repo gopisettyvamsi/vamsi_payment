@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import { View, StyleSheet, Animated, Image } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { C } from "../../lib/theme";
+import { useTheme } from "../../lib/ThemeContext";
 
 const logo = require("../../assets/logo.png");
 
 export default function Splash({ onFinish }) {
+  const { theme } = useTheme();
   const scale = useRef(new Animated.Value(0.3)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
@@ -13,7 +13,7 @@ export default function Splash({ onFinish }) {
   useEffect(() => {
     Animated.sequence([
       Animated.parallel([
-        Animated.spring(scale, { toValue: 1, friction: 4, tension: 80, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, friction: 5, tension: 80, useNativeDriver: true }),
         Animated.timing(opacity, { toValue: 1, duration: 400, useNativeDriver: true }),
       ]),
       Animated.timing(textOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
@@ -26,20 +26,19 @@ export default function Splash({ onFinish }) {
   }, []);
 
   return (
-    <LinearGradient colors={C.purpleDeep} style={s.container}>
-      <Animated.View style={[s.logoWrap, { transform: [{ scale }], opacity }]}>
+    <View style={[s.container, { backgroundColor: theme.bg }]}>
+      <Animated.View style={{ transform: [{ scale }], opacity }}>
         <Image source={logo} style={s.logoImg} resizeMode="contain" />
       </Animated.View>
-      <Animated.Text style={[s.brand, { opacity: textOpacity }]}>Vamsify</Animated.Text>
-      <Animated.Text style={[s.tagline, { opacity: textOpacity }]}>Smart money tracking</Animated.Text>
-    </LinearGradient>
+      <Animated.Text style={[s.brand, { color: theme.text }]}>Vamsify</Animated.Text>
+      <Animated.Text style={[s.tagline, { color: theme.textMuted }]}>Smart money tracking</Animated.Text>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center" },
-  logoWrap: { marginBottom: 20 },
-  logoImg: { width: 120, height: 120, borderRadius: 60 },
-  brand: { fontSize: 34, fontWeight: "900", color: "#fff", letterSpacing: 2 },
-  tagline: { fontSize: 14, color: "rgba(255,255,255,0.5)", marginTop: 6 },
+  logoImg: { width: 100, height: 100, borderRadius: 50 },
+  brand: { fontSize: 32, fontWeight: "800", letterSpacing: 1, marginTop: 20 },
+  tagline: { fontSize: 14, fontWeight: "500", marginTop: 6 },
 });
